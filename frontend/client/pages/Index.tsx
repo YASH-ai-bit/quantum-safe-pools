@@ -1,9 +1,26 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Shield, Zap, TrendingUp, Lock, BarChart3, Users } from "lucide-react";
+import { ArrowRight, Shield, Zap, TrendingUp, Lock, BarChart3, Users, Loader2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { useWalletData } from "@/hooks/useWalletData";
+import { usePools } from "@/hooks/usePools";
+import { usePlatformStats } from "@/hooks/usePlatformStats";
 
 export default function Index() {
+  const { totalBalance, tokenBalances, loading: walletLoading } = useWalletData();
+  const { pools, loading: poolsLoading } = usePools();
+  const { stats, loading: statsLoading } = usePlatformStats();
+
+  // Get top 2 pools by TVL
+  const topPools = pools
+    .sort((a, b) => parseFloat(b.tvl || '0') - parseFloat(a.tvl || '0'))
+    .slice(0, 2);
+
+  // Get primary token balances for display
+  const ethBalance = tokenBalances.find(t => t.symbol === 'ETH');
+  const btcBalance = null; // Would need BTC token address
+  const lptBalance = null; // Would need LP token tracking
+
   return (
     <div className="min-h-screen flex flex-col bg-black">
       <Header />
@@ -68,28 +85,34 @@ export default function Index() {
                 <div className="relative z-10 pt-8 space-y-6">
                   <div className="space-y-2 pixel-text text-primary">
                     <p className="text-sm">{'> Balance:'}</p>
-                    <p className="text-3xl font-bold text-foreground">$24,856.34</p>
+                    {walletLoading ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    ) : (
+                      <p className="text-3xl font-bold text-foreground">
+                        ${totalBalance || '0.00'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-3 pixel-text text-sm">
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{'> btc_qs:'}</span>
-                      <span className="text-primary">2.45 BTC</span>
+                      <span className="text-primary">{btcBalance ? `${btcBalance.amount} BTC` : '0.00 BTC'}</span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{'> eth_qs:'}</span>
-                      <span className="text-primary">12.8 ETH</span>
+                      <span className="text-primary">{ethBalance ? `${ethBalance.amount} ETH` : '0.00 ETH'}</span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{'> lpt_tokens:'}</span>
-                      <span className="text-primary">5,420 LPT</span>
+                      <span className="text-primary">{lptBalance ? `${lptBalance.amount} LPT` : '0.00 LPT'}</span>
                     </div>
                   </div>
 
                   <div className="pt-4 border-t-2 border-primary">
                     <div className="flex items-center gap-2 pixel-text text-primary text-sm">
                       <TrendingUp className="w-5 h-5" />
-                      <span>+12.5% this month</span>
+                      <span>+0.0% this month</span>
                     </div>
                   </div>
                 </div>
@@ -162,37 +185,48 @@ export default function Index() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Popular Pools */}
-            {[
-              { name: "BTC-ETH", tvl: "$45.2M", apy: "18.5%", users: "2,340" },
-              { name: "ETH-USDC", tvl: "$78.5M", apy: "22.3%", users: "5,120" },
-            ].map((pool) => (
-              <div key={pool.name} className="border-2 border-primary p-6 group hover:bg-primary/10 transition-all duration-300 glitch-hover">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="text-xl font-bold pixel-text text-foreground mb-1">{pool.name}</h4>
-                    <p className="text-foreground/60 pixel-text text-sm">pool_pair</p>
-                  </div>
-                  <div className="w-12 h-12 border-2 border-primary flex items-center justify-center bg-primary/20">
-                    <TrendingUp className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t-2 border-primary">
-                  <div className="pixel-text">
-                    <p className="text-foreground/60 text-sm mb-1">tvl</p>
-                    <p className="font-bold text-lg text-foreground">{pool.tvl}</p>
-                  </div>
-                  <div className="pixel-text">
-                    <p className="text-foreground/60 text-sm mb-1">apy</p>
-                    <p className="font-bold text-lg text-primary">{pool.apy}</p>
-                  </div>
-                  <div className="pixel-text">
-                    <p className="text-foreground/60 text-sm mb-1">users</p>
-                    <p className="font-bold text-lg text-foreground">{pool.users}</p>
-                  </div>
-                </div>
+            {poolsLoading ? (
+              <div className="col-span-2 text-center py-12">
+                <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+                <p className="text-foreground/60 pixel-text">Loading pools...</p>
               </div>
-            ))}
+            ) : topPools.length > 0 ? (
+              topPools.map((pool) => {
+                const pair = `${pool.token0Symbol || 'TOKEN0'}-${pool.token1Symbol || 'TOKEN1'}`;
+                return (
+                  <div key={pool.id} className="border-2 border-primary p-6 group hover:bg-primary/10 transition-all duration-300 glitch-hover">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-xl font-bold pixel-text text-foreground mb-1">{pair}</h4>
+                        <p className="text-foreground/60 pixel-text text-sm">pool_pair</p>
+                      </div>
+                      <div className="w-12 h-12 border-2 border-primary flex items-center justify-center bg-primary/20">
+                        <TrendingUp className="w-6 h-6 text-primary" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t-2 border-primary">
+                      <div className="pixel-text">
+                        <p className="text-foreground/60 text-sm mb-1">tvl</p>
+                        <p className="font-bold text-lg text-foreground">${pool.tvl || '0.00'}</p>
+                      </div>
+                      <div className="pixel-text">
+                        <p className="text-foreground/60 text-sm mb-1">apy</p>
+                        <p className="font-bold text-lg text-primary">{pool.apy || '0.00'}%</p>
+                      </div>
+                      <div className="pixel-text">
+                        <p className="text-foreground/60 text-sm mb-1">users</p>
+                        <p className="font-bold text-lg text-foreground">0</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="col-span-2 text-center py-12">
+                <p className="text-foreground/60 pixel-text">No pools available yet</p>
+              </div>
+            )}
           </div>
 
           <div className="text-center">
@@ -211,26 +245,38 @@ export default function Index() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="text-center secondary-border p-8 glitch-hover">
-              <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
-                $1.2B
-              </p>
+              {statsLoading ? (
+                <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-2" />
+              ) : (
+                <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
+                  {stats.totalTVL || '$0'}
+                </p>
+              )}
               <p className="text-foreground/70 pixel-text">tvl_locked</p>
             </div>
             <div className="text-center secondary-border p-8 glitch-hover">
-              <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
-                45K+
-              </p>
+              {statsLoading ? (
+                <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-2" />
+              ) : (
+                <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
+                  {stats.activeUsers || '0'}
+                </p>
+              )}
               <p className="text-foreground/70 pixel-text">active_users</p>
             </div>
             <div className="text-center secondary-border p-8 glitch-hover">
-              <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
-                320+
-              </p>
+              {statsLoading ? (
+                <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-2" />
+              ) : (
+                <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
+                  {stats.liquidityPools || '0'}
+                </p>
+              )}
               <p className="text-foreground/70 pixel-text">liquidity_pools</p>
             </div>
             <div className="text-center secondary-border p-8 glitch-hover">
               <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
-                99.99%
+                {stats.uptime || '99.99%'}
               </p>
               <p className="text-foreground/70 pixel-text">uptime_sla</p>
             </div>
