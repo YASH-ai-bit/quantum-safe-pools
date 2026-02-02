@@ -11,6 +11,39 @@ interface SnapState {
   accountAddress: string | null;
 }
 
+// Helper to get Flask provider specifically
+function getFlaskProvider() {
+  const { ethereum } = window as any;
+  
+  if (!ethereum) {
+    console.log('No ethereum provider found');
+    return null;
+  }
+
+  // If multiple providers exist, find Flask specifically
+  if (ethereum.providers?.length) {
+    console.log('Multiple providers detected:', ethereum.providers.length);
+    const flaskProvider = ethereum.providers.find((provider: any) => {
+      console.log('Checking provider:', { isMetaMask: provider.isMetaMask, isFlask: provider.isFlask });
+      return provider.isMetaMask && provider.isFlask;
+    });
+    
+    if (flaskProvider) {
+      console.log('✅ Flask provider found in providers array');
+      return flaskProvider;
+    }
+    
+    // Fallback: if no Flask flag, try the first MetaMask that supports snaps
+    const mmProvider = ethereum.providers.find((p: any) => p.isMetaMask);
+    console.log('Trying fallback MetaMask provider');
+    return mmProvider || ethereum.providers[0];
+  }
+
+  // Single provider - could be Flask
+  console.log('Single provider detected:', { isMetaMask: ethereum.isMetaMask, isFlask: ethereum.isFlask });
+  return ethereum;
+}
+
 export function useSnap() {
   const [snapState, setSnapState] = useState<SnapState>({
     isFlask: false,
@@ -26,24 +59,29 @@ export function useSnap() {
   // Check if MetaMask Flask is installed
   useEffect(() => {
     const checkFlask = async () => {
-      const provider = (window as any).ethereum;
+      console.log('🔍 Checking for Flask...');
+      const provider = getFlaskProvider();
+      
       if (!provider) {
+        console.log('❌ No provider found');
         setSnapState((prev) => ({ ...prev, isFlask: false }));
         return;
       }
 
       try {
+        console.log('📡 Testing wallet_getSnaps method...');
         // Try to call wallet_getSnaps - this method only exists in Flask
-        await provider.request({
+        const snaps = await provider.request({
           method: 'wallet_getSnaps',
         });
 
         // If we get here, Flask is installed
+        console.log('✅ Flask detected! Snaps:', snaps);
         setSnapState((prev) => ({ ...prev, isFlask: true }));
         await checkSnapInstalled();
-      } catch (err) {
+      } catch (err: any) {
         // If this fails, Flask is not installed
-        console.log('Flask not detected:', err);
+        console.log('❌ Flask not detected. Error:', err.message || err);
         setSnapState((prev) => ({ ...prev, isFlask: false }));
       }
     };
@@ -55,13 +93,14 @@ export function useSnap() {
       checkFlask();
     };
     
-    if ((window as any).ethereum) {
-      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
+    const provider = getFlaskProvider();
+    if (provider) {
+      provider.on('accountsChanged', handleAccountsChanged);
     }
     
     return () => {
-      if ((window as any).ethereum) {
-        (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      if (provider) {
+        provider.removeListener('accountsChanged', handleAccountsChanged);
       }
     };
   }, []);
@@ -69,7 +108,10 @@ export function useSnap() {
   // Check if snap is already installed
   const checkSnapInstalled = async () => {
     try {
-      const snaps = await (window as any).ethereum.request({
+      const provider = getFlaskProvider();
+      if (!provider) return;
+
+      const snaps = await provider.request({
         method: 'wallet_getSnaps',
       });
 
@@ -90,7 +132,8 @@ export function useSnap() {
 
   // Install and connect to snap
   const connectSnap = useCallback(async () => {
-    if (!snapState.isFlask) {
+    const provider = getFlaskProvider();
+    if (!provider || !snapState.isFlask) {
       setError('Please install MetaMask Flask');
       return false;
     }
@@ -99,7 +142,7 @@ export function useSnap() {
     setError(null);
 
     try {
-      await (window as any).ethereum.request({
+      await provider.request({
         method: 'wallet_requestSnaps',
         params: {
           [SNAP_ID]: {},
@@ -128,7 +171,10 @@ export function useSnap() {
   // Initialize quantum keys in snap
   const initializeSnap = async () => {
     try {
-      await (window as any).ethereum.request({
+      const provider = getFlaskProvider();
+      if (!provider) throw new Error('Flask provider not found');
+
+      await provider.request({
         method: 'wallet_invokeSnap',
         params: {
           snapId: SNAP_ID,
@@ -146,7 +192,10 @@ export function useSnap() {
   // Load snap data
   const loadSnapData = async () => {
     try {
-      const publicKeyData = await (window as any).ethereum.request({
+      const provider = getFlaskProvider();
+      if (!provider) return;
+
+      const publicKeyData = await provider.request({
         method: 'wallet_invokeSnap',
         params: {
           snapId: SNAP_ID,
@@ -156,7 +205,7 @@ export function useSnap() {
         },
       });
 
-      const accountData = await (window as any).ethereum.request({
+      const accountData = await provider.request({
         method: 'wallet_invokeSnap',
         params: {
           snapId: SNAP_ID,
@@ -186,8 +235,11 @@ export function useSnap() {
       throw new Error('Snap not connected');
     }
 
+    const provider = getFlaskProvider();
+    if (!provider) throw new Error('Flask provider not found');
+
     try {
-      const signature = await (window as any).ethereum.request({
+      const signature = await provider.request({
         method: 'wallet_invokeSnap',
         params: {
           snapId: SNAP_ID,
@@ -211,8 +263,11 @@ export function useSnap() {
       throw new Error('Snap not connected');
     }
 
+    const provider = getFlaskProvider();
+    if (!provider) throw new Error('Flask provider not found');
+
     try {
-      const txHash = await (window as any).ethereum.request({
+      const txHash = await provider.request({
         method: 'wallet_invokeSnap',
         params: {
           snapId: SNAP_ID,

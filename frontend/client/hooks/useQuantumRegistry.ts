@@ -9,13 +9,40 @@ const REGISTRY_ABI = [
   'function totalRegistered() external view returns (uint256)',
 ];
 
+// Helper to get Flask provider specifically
+function getFlaskProvider() {
+  const { ethereum } = window as any;
+  
+  if (!ethereum) {
+    return null;
+  }
+
+  // If multiple providers exist, find Flask specifically
+  if (ethereum.providers?.length) {
+    const flaskProvider = ethereum.providers.find((provider: any) => 
+      provider.isMetaMask && provider.isFlask
+    );
+    
+    if (flaskProvider) {
+      return flaskProvider;
+    }
+    
+    // Fallback: try the first MetaMask that supports snaps
+    const mmProvider = ethereum.providers.find((p: any) => p.isMetaMask);
+    return mmProvider || ethereum.providers[0];
+  }
+
+  // Single provider - could be Flask
+  return ethereum;
+}
+
 export function useQuantumRegistry() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Helper to check if Flask is available
   const isFlaskAvailable = async (): Promise<boolean> => {
-    const provider = (window as any).ethereum;
+    const provider = getFlaskProvider();
     if (!provider) return false;
     
     try {
@@ -38,7 +65,11 @@ export function useQuantumRegistry() {
     try {
       // Using ethers v6 syntax - Read-only, no connection needed
       const { ethers } = await import('ethers');
-      const provider = new ethers.BrowserProvider((window as any).ethereum, 'any');
+      const flaskProvider = getFlaskProvider();
+      if (!flaskProvider) {
+        throw new Error('MetaMask Flask not found');
+      }
+      const provider = new ethers.BrowserProvider(flaskProvider, 'any');
       
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
@@ -70,7 +101,11 @@ export function useQuantumRegistry() {
 
     try {
       const { ethers } = await import('ethers');
-      const provider = new ethers.BrowserProvider((window as any).ethereum, 'any');
+      const flaskProvider = getFlaskProvider();
+      if (!flaskProvider) {
+        throw new Error('MetaMask Flask not found');
+      }
+      const provider = new ethers.BrowserProvider(flaskProvider, 'any');
       const signer = await provider.getSigner();
       
       const registry = new ethers.Contract(
@@ -96,7 +131,11 @@ export function useQuantumRegistry() {
   const getTotalRegistered = useCallback(async (): Promise<number> => {
     try {
       const { ethers } = await import('ethers');
-      const provider = new ethers.BrowserProvider((window as any).ethereum, 'any');
+      const flaskProvider = getFlaskProvider();
+      if (!flaskProvider) {
+        return 0;
+      }
+      const provider = new ethers.BrowserProvider(flaskProvider, 'any');
       
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
