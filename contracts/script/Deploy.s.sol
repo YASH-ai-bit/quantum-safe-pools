@@ -55,7 +55,7 @@ contract Deploy is Script {
         console.log("HackathonPaymaster deployed to:", address(paymaster));
 
         // 6. Deploy Uniswap V4 PoolManager
-        PoolManager poolManager = new PoolManager(500000);
+        PoolManager poolManager = new PoolManager(deployer);
         console.log("PoolManager deployed to:", address(poolManager));
 
         // 7. Deploy QuantumHook
