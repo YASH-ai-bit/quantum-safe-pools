@@ -1,0 +1,202 @@
+/** @import must precede all other statements */
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Courier+Prime:wght@400;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /**
+   * Coder/Hacker Style Theme
+   * Black background, white text, neon lime accent
+   * Only 2 colors: Black and Neon Lime Green
+   * tailwind.config.ts expects the following color variables to be expressed as HSL values.
+  */
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 90 100% 50%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 90 100% 50%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 0 0% 30%;
+    --muted-foreground: 0 0% 70%;
+
+    --accent: 90 100% 50%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 10%;
+    --ring: 90 100% 50%;
+
+    --radius: 0rem;
+
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 90 100% 50%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 90 100% 50%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 90 100% 50%;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 90 100% 50%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 90 100% 50%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 0 0% 30%;
+    --muted-foreground: 0 0% 70%;
+
+    --accent: 90 100% 50%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 10%;
+    --ring: 90 100% 50%;
+
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 90 100% 50%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 90 100% 50%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 90 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: #000000;
+    font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+    image-rendering: pixelated;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    text-shadow: 0 0 10px hsl(90 100% 50% / 0.3);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  pre,
+  code {
+    overflow-x: auto;
+    white-space: pre;
+    font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+  }
+}
+
+@layer components {
+  .coder-glow {
+    @apply shadow-lg;
+    text-shadow: 0 0 10px hsl(90 100% 50% / 0.5);
+    box-shadow: 0 0 20px hsl(90 100% 50% / 0.3);
+  }
+
+  .coder-glow-strong {
+    text-shadow: 0 0 20px hsl(90 100% 50% / 0.8);
+    box-shadow: 0 0 40px hsl(90 100% 50% / 0.5), inset 0 0 20px hsl(90 100% 50% / 0.1);
+  }
+
+  .coder-gradient {
+    background: linear-gradient(135deg, #00ff00 0%, #7fff00 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .pixel-text {
+    font-family: 'JetBrains Mono', 'Courier Prime', monospace;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 10px hsl(90 100% 50% / 0.4);
+  }
+
+  .terminal-border {
+    @apply border-2;
+    border-color: hsl(90 100% 50%);
+    background-color: #000000;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300;
+    &:hover {
+      box-shadow: 0 0 20px hsl(90 100% 50% / 0.5), inset 0 0 10px hsl(90 100% 50% / 0.1);
+    }
+  }
+
+  .coder-panel {
+    @apply bg-black border-2 border-primary;
+    box-shadow: 0 0 15px hsl(90 100% 50% / 0.2);
+  }
+
+  .glitch-hover {
+    @apply transition-all cursor-pointer;
+    &:hover {
+      animation: glitch 0.3s ease-out;
+      box-shadow: 0 0 20px hsl(90 100% 50% / 0.6);
+    }
+  }
+
+  .cypher-hover {
+    @apply transition-all cursor-pointer;
+    &:hover {
+      animation: cypher 0.6s ease-out;
+    }
+  }
+
+  .glitch-text-hover {
+    @apply transition-all;
+    &:hover {
+      animation: cypher 0.6s ease-out;
+      text-shadow: 0 0 20px hsl(90 100% 50% / 0.8), 0 0 40px hsl(90 100% 50% / 0.4);
+    }
+  }
+
+  .secondary-border {
+    @apply border border-primary/30;
+  }
+
+  .tertiary-border {
+    @apply border border-primary/20;
+  }
+}
