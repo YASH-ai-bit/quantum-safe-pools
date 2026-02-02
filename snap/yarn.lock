@@ -58,6 +58,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@aztec/bb.js@npm:0.46.1":
+  version: 0.46.1
+  resolution: "@aztec/bb.js@npm:0.46.1"
+  dependencies:
+    comlink: ^4.4.1
+    commander: ^10.0.1
+    debug: ^4.3.4
+    tslib: ^2.4.0
+  bin:
+    bb.js: dest/node/main.js
+  checksum: 9475388f994e430ab3282a2c9769cd116f334358049955ed520f467d1abec8237bfeae7fa2fed9cd292f24c09c466e32e2af2d0a5cec2d10cc0c727728d96b0d
+  languageName: node
+  linkType: hard
+
 "@babel/code-frame@npm:7.12.11":
   version: 7.12.11
   resolution: "@babel/code-frame@npm:7.12.11"
@@ -3658,6 +3672,51 @@ __metadata:
     "@nodelib/fs.scandir": 2.1.5
     fastq: ^1.6.0
   checksum: 190c643f156d8f8f277bf2a6078af1ffde1fd43f498f187c2db24d35b4b4b5785c02c7dc52e356497b9a1b65b13edc996de08de0b961c32844364da02986dc53
+  languageName: node
+  linkType: hard
+
+"@noir-lang/acvm_js@npm:0.48.0":
+  version: 0.48.0
+  resolution: "@noir-lang/acvm_js@npm:0.48.0"
+  checksum: 5046a11dedacfafd62b3c2d62cb6b115c056c054d5f34c76999ff248b9fc882dcbe6813eeb6e671fb0d000e4a4f84ece8141200485c8793ad584195473a8d962
+  languageName: node
+  linkType: hard
+
+"@noir-lang/backend_barretenberg@npm:^0.32.0":
+  version: 0.32.0
+  resolution: "@noir-lang/backend_barretenberg@npm:0.32.0"
+  dependencies:
+    "@aztec/bb.js": 0.46.1
+    "@noir-lang/types": 0.32.0
+    fflate: ^0.8.0
+  checksum: 075a1c53c9f1710f69eae2f14dba7470b6476c17da56cb9cd10058bba589d6a60b166550621a2cdaf3cc405f6b6a11300482e55199324f302ebed61999c19d44
+  languageName: node
+  linkType: hard
+
+"@noir-lang/noir_js@npm:^0.32.0":
+  version: 0.32.0
+  resolution: "@noir-lang/noir_js@npm:0.32.0"
+  dependencies:
+    "@noir-lang/acvm_js": 0.48.0
+    "@noir-lang/noirc_abi": 0.32.0
+    "@noir-lang/types": 0.32.0
+  checksum: fd5f51c35854f793f8ec20f8437a89a4cf87562f80adfd2870a56535f5faef4c75ce9a3f2f3daaa6ab3a77d125c18b55bd35247ff33d97c1d3f8d76f5b440749
+  languageName: node
+  linkType: hard
+
+"@noir-lang/noirc_abi@npm:0.32.0":
+  version: 0.32.0
+  resolution: "@noir-lang/noirc_abi@npm:0.32.0"
+  dependencies:
+    "@noir-lang/types": 0.32.0
+  checksum: ed4c5e37eb7856ae11d45af67d8c0817da456f0b026697a805c75e9360438904774926859dab5cf272f20095fe9733b360bf6ef1361c40bd35e1dc87a54bea8f
+  languageName: node
+  linkType: hard
+
+"@noir-lang/types@npm:0.32.0":
+  version: 0.32.0
+  resolution: "@noir-lang/types@npm:0.32.0"
+  checksum: a732a88283050d333a488ff32b4674a70e344b33b5054db2357e421280fe66e9ab62b5b417adf99cc94f26262cb4d6296354271dfdf2df720f104b9d333fe597
   languageName: node
   linkType: hard
 
@@ -7795,10 +7854,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"comlink@npm:^4.4.1":
+  version: 4.4.2
+  resolution: "comlink@npm:4.4.2"
+  checksum: 35313f26fdd78c202be21be49a7607f57e9e91963399b524676742ee0cf7db589be500d923ed0809b53f37996461186fb345bf867d93236be22bfae3cb7bd07e
+  languageName: node
+  linkType: hard
+
 "command-exists@npm:^1.2.4":
   version: 1.2.9
   resolution: "command-exists@npm:1.2.9"
   checksum: 729ae3d88a2058c93c58840f30341b7f82688a573019535d198b57a4d8cb0135ced0ad7f52b591e5b28a90feb2c675080ce916e56254a0f7c15cb2395277cac3
+  languageName: node
+  linkType: hard
+
+"commander@npm:^10.0.1":
+  version: 10.0.1
+  resolution: "commander@npm:10.0.1"
+  checksum: 436901d64a818295803c1996cd856621a74f30b9f9e28a588e726b2b1670665bccd7c1a77007ebf328729f0139838a88a19265858a0fa7a8728c4656796db948
   languageName: node
   linkType: hard
 
@@ -8815,6 +8888,13 @@ __metadata:
     miller-rabin: ^4.0.0
     randombytes: ^2.0.0
   checksum: 0e620f322170c41076e70181dd1c24e23b08b47dbb92a22a644f3b89b6d3834b0f8ee19e37916164e5eb1ee26d2aa836d6129f92723995267250a0b541811065
+  languageName: node
+  linkType: hard
+
+"dilithium-crystals@npm:^1.0.6":
+  version: 1.0.6
+  resolution: "dilithium-crystals@npm:1.0.6"
+  checksum: 2f8ebf97b7153bb027a0124f8546a4bfd9b5741d89882a4e31551d9288257bb85806cd19a7557534331aec2562f0b8fb09b672599751a569caf989d2f8d44f04
   languageName: node
   linkType: hard
 
@@ -10029,7 +10109,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethers@npm:^6.16.0":
+"ethers@npm:^6, ethers@npm:^6.16.0":
   version: 6.16.0
   resolution: "ethers@npm:6.16.0"
   dependencies:
@@ -10392,6 +10472,13 @@ __metadata:
     picomatch:
       optional: true
   checksum: fa53e13c63e8c14add5b70fd47e28267dd5481ebbba4b47720ec25aae7d10a800ef0f2e33de350faaf63c10b3d7b64138925718832220d593f75e724846c736d
+  languageName: node
+  linkType: hard
+
+"fflate@npm:^0.8.0":
+  version: 0.8.2
+  resolution: "fflate@npm:0.8.2"
+  checksum: 29470337b85d3831826758e78f370e15cda3169c5cd4477c9b5eea2402261a74b2975bae816afabe1c15d21d98591e0d30a574f7103aa117bff60756fa3035d4
   languageName: node
   linkType: hard
 
@@ -17695,9 +17782,13 @@ __metadata:
     "@metamask/snaps-cli": ^8.3.0
     "@metamask/snaps-jest": ^9.8.0
     "@metamask/snaps-sdk": ~10.3.0
+    "@noir-lang/backend_barretenberg": ^0.32.0
+    "@noir-lang/noir_js": ^0.32.0
     "@types/react": 18.2.4
     "@types/react-dom": 18.2.4
+    dilithium-crystals: ^1.0.6
     eslint: ^9.11.0
+    ethers: ^6
     jest: ^29.5.0
     rimraf: ^3.0.2
     ts-jest: ^29.1.0

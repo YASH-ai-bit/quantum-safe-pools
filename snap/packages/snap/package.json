@@ -27,7 +27,11 @@
     "test": "jest"
   },
   "dependencies": {
-    "@metamask/snaps-sdk": "~10.3.0"
+    "@metamask/snaps-sdk": "~10.3.0",
+    "@noir-lang/backend_barretenberg": "^0.32.0",
+    "@noir-lang/noir_js": "^0.32.0",
+    "dilithium-crystals": "^1.0.6",
+    "ethers": "^6"
   },
   "devDependencies": {
     "@jest/globals": "^29.5.0",

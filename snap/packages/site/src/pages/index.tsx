@@ -1,10 +1,10 @@
+import { useState } from 'react';
 import styled from 'styled-components';
 
 import {
   ConnectButton,
   InstallFlaskButton,
   ReconnectButton,
-  SendHelloButton,
   Card,
 } from '../components';
 import { defaultSnapOrigin } from '../config';
@@ -100,27 +100,118 @@ const ErrorMessage = styled.div`
   }
 `;
 
+const SuccessMessage = styled.div`
+  background-color: #0a3d0a;
+  border: 1px solid #00ff00;
+  color: #00ff00;
+  border-radius: ${({ theme }) => theme.radii.default};
+  padding: 2.4rem;
+  margin-bottom: 2.4rem;
+  margin-top: 2.4rem;
+  max-width: 60rem;
+  width: 100%;
+`;
+
+const ResultBox = styled.div`
+  background-color: ${({ theme }) => theme.colors.background?.alternative};
+  border: 1px solid ${({ theme }) => theme.colors.border?.default};
+  border-radius: ${({ theme }) => theme.radii.default};
+  padding: 1.6rem;
+  margin-top: 1.2rem;
+  font-family: monospace;
+  font-size: 1.2rem;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+`;
+
+const QuantumButton = styled.button`
+  display: flex;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  background: linear-gradient(135deg, #00d4ff 0%, #9000ff 100%);
+  color: white;
+  font-weight: bold;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  &:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 const Index = () => {
   const { error } = useMetaMaskContext();
   const { isFlask, snapsDetected, installedSnap } = useMetaMask();
   const requestSnap = useRequestSnap();
   const invokeSnap = useInvokeSnap();
 
+  const [keysInitialized, setKeysInitialized] = useState(false);
+  const [publicKeyData, setPublicKeyData] = useState<any>(null);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+
   const isMetaMaskReady = isLocalSnap(defaultSnapOrigin)
     ? isFlask
     : snapsDetected;
 
-  const handleSendHelloClick = async () => {
-    await invokeSnap({ method: 'hello' });
+  const handleInitializeKeys = async () => {
+    setLoading('init');
+    try {
+      const result = await invokeSnap({ method: 'quantum_initialize' });
+      setKeysInitialized(true);
+      console.log('Keys initialized:', result);
+    } catch (err) {
+      console.error('Failed to initialize keys:', err);
+    }
+    setLoading(null);
+  };
+
+  const handleGetPublicKey = async () => {
+    setLoading('pubkey');
+    try {
+      const result = (await invokeSnap({
+        method: 'quantum_getPublicKey',
+      })) as any;
+      setPublicKeyData(result);
+      console.log('Public key:', result);
+    } catch (err) {
+      console.error('Failed to get public key:', err);
+    }
+    setLoading(null);
+  };
+
+  const handleTestKeys = async () => {
+    setLoading('test');
+    try {
+      const result = await invokeSnap({ method: 'quantum_testKeys' });
+      setTestResult(result);
+      console.log('Test result:', result);
+    } catch (err) {
+      console.error('Test failed:', err);
+      setTestResult({ error: (err as Error).message });
+    }
+    setLoading(null);
   };
 
   return (
     <Container>
       <Heading>
-        Welcome to <Span>template-snap</Span>
+        🔐 <Span>QuantumPools</Span>
       </Heading>
       <Subtitle>
-        Get started by editing <code>src/index.tsx</code>
+        Post-Quantum Safe ERC-4337 Accounts with Dilithium Signatures
       </Subtitle>
       <CardContainer>
         {error && (
@@ -131,9 +222,9 @@ const Index = () => {
         {!isMetaMaskReady && (
           <Card
             content={{
-              title: 'Install',
+              title: 'Install MetaMask Flask',
               description:
-                'Snaps is pre-release software only available in MetaMask Flask, a canary distribution for developers with access to upcoming features.',
+                'QuantumPools requires MetaMask Flask to generate and manage your quantum-safe Dilithium keys.',
               button: <InstallFlaskButton />,
             }}
             fullWidth
@@ -142,9 +233,9 @@ const Index = () => {
         {!installedSnap && (
           <Card
             content={{
-              title: 'Connect',
+              title: 'Connect QuantumPools Snap',
               description:
-                'Get started by connecting to and installing the example snap.',
+                'Connect to install the QuantumPools snap which manages your Dilithium-3 post-quantum keypair.',
               button: (
                 <ConnectButton
                   onClick={requestSnap}
@@ -159,8 +250,7 @@ const Index = () => {
           <Card
             content={{
               title: 'Reconnect',
-              description:
-                'While connected to a local running snap this button will always be displayed in order to update the snap if a change is made.',
+              description: 'Update the snap after making changes.',
               button: (
                 <ReconnectButton
                   onClick={requestSnap}
@@ -171,31 +261,96 @@ const Index = () => {
             disabled={!installedSnap}
           />
         )}
+
+        {/* Initialize Quantum Keys */}
         <Card
           content={{
-            title: 'Send Hello message',
+            title: '1. Initialize Quantum Keys',
             description:
-              'Display a custom message within a confirmation screen in MetaMask.',
+              'Generate your Dilithium-3 post-quantum keypair. This creates a 1952-byte public key and 4000-byte private key stored securely in the snap.',
             button: (
-              <SendHelloButton
-                onClick={handleSendHelloClick}
-                disabled={!installedSnap}
-              />
+              <QuantumButton
+                onClick={handleInitializeKeys}
+                disabled={!installedSnap || loading === 'init'}
+              >
+                {loading === 'init'
+                  ? '⏳ Generating...'
+                  : keysInitialized
+                    ? '✅ Keys Ready'
+                    : '🔑 Initialize Keys'}
+              </QuantumButton>
             ),
           }}
           disabled={!installedSnap}
-          fullWidth={
-            isMetaMaskReady &&
-            Boolean(installedSnap) &&
-            !shouldDisplayReconnectButton(installedSnap)
-          }
         />
+
+        {/* Get Public Key */}
+        <Card
+          content={{
+            title: '2. Get Public Key',
+            description:
+              'Retrieve your Dilithium-3 public key. This 1952-byte key is used to verify your quantum-safe signatures.',
+            button: (
+              <QuantumButton
+                onClick={handleGetPublicKey}
+                disabled={
+                  !installedSnap || !keysInitialized || loading === 'pubkey'
+                }
+              >
+                {loading === 'pubkey' ? '⏳ Loading...' : '📤 Get Public Key'}
+              </QuantumButton>
+            ),
+          }}
+          disabled={!installedSnap || !keysInitialized}
+        />
+
+        {/* Test Keys */}
+        <Card
+          content={{
+            title: '3. Test Quantum Signing',
+            description:
+              'Sign a test message with your Dilithium private key and verify the 3293-byte quantum-safe signature.',
+            button: (
+              <QuantumButton
+                onClick={handleTestKeys}
+                disabled={
+                  !installedSnap || !keysInitialized || loading === 'test'
+                }
+              >
+                {loading === 'test' ? '⏳ Signing...' : '✍️ Test Sign & Verify'}
+              </QuantumButton>
+            ),
+          }}
+          disabled={!installedSnap || !keysInitialized}
+        />
+
+        {/* Display Results */}
+        {publicKeyData && (
+          <SuccessMessage>
+            <b>Dilithium-3 Public Key ({publicKeyData.publicKey?.bytes || 0} bytes)</b>
+            <ResultBox>
+              <div><b>Algorithm:</b> {publicKeyData.algorithm}</div>
+              <div><b>Standard:</b> {publicKeyData.standard}</div>
+              <div><b>Size:</b> {publicKeyData.publicKey?.bytes} bytes ({publicKeyData.publicKey?.bits} bits)</div>
+              <div><b>Hash:</b> {publicKeyData.publicKey?.hash}</div>
+              <div><b>Preview:</b> {publicKeyData.publicKey?.preview?.first32Bytes}...</div>
+            </ResultBox>
+          </SuccessMessage>
+        )}
+
+        {testResult && (
+          <SuccessMessage>
+            <b>✅ Quantum Signature Test Result</b>
+            <ResultBox>{JSON.stringify(testResult, null, 2)}</ResultBox>
+          </SuccessMessage>
+        )}
+
         <Notice>
           <p>
-            Please note that the <b>snap.manifest.json</b> and{' '}
-            <b>package.json</b> must be located in the server root directory and
-            the bundle must be hosted at the location specified by the location
-            field.
+            <b>🛡️ Post-Quantum Security:</b> QuantumPools uses
+            CRYSTALS-Dilithium (NIST FIPS 204), a lattice-based signature scheme
+            resistant to quantum computer attacks. Your keys are stored
+            encrypted in the MetaMask snap and never leave your browser.
           </p>
         </Notice>
       </CardContainer>

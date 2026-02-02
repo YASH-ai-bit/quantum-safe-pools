@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuantumPools Snap Test</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #1a1a1a;
+        color: #fff;
+      }
+      h1 {
+        color: #00d4ff;
+        text-align: center;
+      }
+      .section {
+        background: #2a2a2a;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid #444;
+      }
+      button {
+        background: #00d4ff;
+        color: #000;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        margin: 5px;
+        font-size: 14px;
+      }
+      button:hover {
+        background: #00a8cc;
+      }
+      button:disabled {
+        background: #555;
+        cursor: not-allowed;
+      }
+      .output {
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 15px;
+        margin-top: 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .success {
+        color: #00ff00;
+      }
+      .error {
+        color: #ff4444;
+      }
+      .warning {
+        color: #ffaa00;
+      }
+      .info {
+        color: #00d4ff;
+      }
+      label {
+        display: block;
+        margin: 10px 0 5px;
+        font-weight: bold;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid #444;
+        background: #1a1a1a;
+        color: #fff;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔐 QuantumPools Snap Tester</h1>
+
+    <div class="section">
+      <h2>1. Connect to Snap</h2>
+      <button id="connectBtn">Connect to QuantumPools Snap</button>
+      <div id="connectOutput" class="output"></div>
+    </div>
+
+    <div class="section">
+      <h2>2. Initialize Quantum Keys</h2>
+      <button id="initBtn" disabled>Initialize Keys</button>
+      <div id="initOutput" class="output"></div>
+    </div>
+
+    <div class="section">
+      <h2>3. Get Public Key</h2>
+      <button id="getPubKeyBtn" disabled>Get Public Key</button>
+      <div id="pubKeyOutput" class="output"></div>
+    </div>
+
+    <div class="section">
+      <h2>4. Test Key Signing</h2>
+      <button id="testKeysBtn" disabled>Test Keys (Sign & Verify)</button>
+      <div id="testKeysOutput" class="output"></div>
+    </div>
+
+    <div class="section">
+      <h2>5. Get Account Address</h2>
+      <label>Factory Address:</label>
+      <input type="text" id="factoryAddress" placeholder="0x..." value="" />
+      <label>RPC URL:</label>
+      <input
+        type="text"
+        id="rpcUrl"
+        placeholder="https://rpc.sepolia.org"
+        value="https://rpc.sepolia.org"
+      />
+      <button id="getAddressBtn" disabled>Get Account Address</button>
+      <div id="addressOutput" class="output"></div>
+    </div>
+
+    <div class="section">
+      <h2>6. Sign Message</h2>
+      <label>Message (hex):</label>
+      <input
+        type="text"
+        id="signMessage"
+        placeholder="0x1234..."
+        value="0x0000000000000000000000000000000000000000000000000000000000000001"
+      />
+      <button id="signMsgBtn" disabled>Sign with Dilithium</button>
+      <div id="signMsgOutput" class="output"></div>
+    </div>
+
+    <script>
+      const SNAP_ID = 'local:http://localhost:8080';
+      let connected = false;
+
+      const log = (elementId, message, type = 'info') => {
+        const output = document.getElementById(elementId);
+        const timestamp = new Date().toLocaleTimeString();
+        const className = type;
+        output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+        output.scrollTop = output.scrollHeight;
+      };
+
+      const clear = (elementId) => {
+        document.getElementById(elementId).innerHTML = '';
+      };
+
+      const enableButtons = () => {
+        document.getElementById('initBtn').disabled = false;
+        document.getElementById('getPubKeyBtn').disabled = false;
+        document.getElementById('testKeysBtn').disabled = false;
+        document.getElementById('getAddressBtn').disabled = false;
+        document.getElementById('signMsgBtn').disabled = false;
+      };
+
+      // Connect to snap
+      document
+        .getElementById('connectBtn')
+        .addEventListener('click', async () => {
+          clear('connectOutput');
+          try {
+            // Check if ethereum provider exists
+            if (typeof window.ethereum === 'undefined') {
+              log('connectOutput', '❌ MetaMask not detected!', 'error');
+              log(
+                'connectOutput',
+                'Please install MetaMask Flask from: https://metamask.io/flask/',
+                'warning',
+              );
+              log(
+                'connectOutput',
+                'Note: You need MetaMask FLASK (developer version), not regular MetaMask',
+                'warning',
+              );
+              return;
+            }
+
+            log('connectOutput', '✓ MetaMask detected', 'success');
+            log('connectOutput', 'Requesting snap connection...', 'info');
+
+            const result = await window.ethereum.request({
+              method: 'wallet_requestSnaps',
+              params: {
+                [SNAP_ID]: {},
+              },
+            });
+
+            log('connectOutput', 'Connected to snap!', 'success');
+            log('connectOutput', JSON.stringify(result, null, 2), 'info');
+            connected = true;
+            enableButtons();
+          } catch (error) {
+            log('connectOutput', `Error: ${error.message}`, 'error');
+            if (error.message.includes('wallet_requestSnaps')) {
+              log(
+                'connectOutput',
+                'Make sure you are using MetaMask Flask, not regular MetaMask',
+                'warning',
+              );
+            }
+          }
+        });
+
+      // Initialize keys
+      document.getElementById('initBtn').addEventListener('click', async () => {
+        clear('initOutput');
+        try {
+          log('initOutput', 'Initializing quantum keys...', 'info');
+
+          const result = await window.ethereum.request({
+            method: 'wallet_invokeSnap',
+            params: {
+              snapId: SNAP_ID,
+              request: {
+                method: 'quantum_initialize',
+              },
+            },
+          });
+
+          log('initOutput', 'Keys initialized!', 'success');
+          log('initOutput', JSON.stringify(result, null, 2), 'info');
+        } catch (error) {
+          log('initOutput', `Error: ${error.message}`, 'error');
+        }
+      });
+
+      // Get public key
+      document
+        .getElementById('getPubKeyBtn')
+        .addEventListener('click', async () => {
+          clear('pubKeyOutput');
+          try {
+            log('pubKeyOutput', 'Fetching public key...', 'info');
+
+            const result = await window.ethereum.request({
+              method: 'wallet_invokeSnap',
+              params: {
+                snapId: SNAP_ID,
+                request: {
+                  method: 'quantum_getPublicKey',
+                },
+              },
+            });
+
+            log(
+              'pubKeyOutput',
+              `Public Key Size: ${result.size} bytes (Dilithium3)`,
+              'success',
+            );
+            log(
+              'pubKeyOutput',
+              `Public Key (first 100 chars): ${result.publicKey.slice(0, 100)}...`,
+              'info',
+            );
+          } catch (error) {
+            log('pubKeyOutput', `Error: ${error.message}`, 'error');
+          }
+        });
+
+      // Test keys
+      document
+        .getElementById('testKeysBtn')
+        .addEventListener('click', async () => {
+          clear('testKeysOutput');
+          try {
+            log(
+              'testKeysOutput',
+              'Testing quantum keys (this will show a confirmation dialog)...',
+              'info',
+            );
+
+            const result = await window.ethereum.request({
+              method: 'wallet_invokeSnap',
+              params: {
+                snapId: SNAP_ID,
+                request: {
+                  method: 'quantum_testKeys',
+                },
+              },
+            });
+
+            log('testKeysOutput', 'Key test complete!', 'success');
+            log('testKeysOutput', JSON.stringify(result, null, 2), 'info');
+          } catch (error) {
+            log('testKeysOutput', `Error: ${error.message}`, 'error');
+          }
+        });
+
+      // Get account address
+      document
+        .getElementById('getAddressBtn')
+        .addEventListener('click', async () => {
+          clear('addressOutput');
+          try {
+            const factoryAddress =
+              document.getElementById('factoryAddress').value;
+            const rpcUrl = document.getElementById('rpcUrl').value;
+
+            if (!factoryAddress) {
+              log('addressOutput', 'Please enter factory address', 'warning');
+              return;
+            }
+
+            log('addressOutput', 'Calculating account address...', 'info');
+
+            const result = await window.ethereum.request({
+              method: 'wallet_invokeSnap',
+              params: {
+                snapId: SNAP_ID,
+                request: {
+                  method: 'quantum_getAccountAddress',
+                  params: {
+                    factoryAddress,
+                    rpcUrl,
+                  },
+                },
+              },
+            });
+
+            log(
+              'addressOutput',
+              `Account Address: ${result.address}`,
+              'success',
+            );
+            log(
+              'addressOutput',
+              `Deployed: ${result.deployed ? 'Yes ✅' : 'No ❌'}`,
+              result.deployed ? 'success' : 'warning',
+            );
+            log(
+              'addressOutput',
+              `Public Key Hash: ${result.publicKeyHash}`,
+              'info',
+            );
+            log('addressOutput', `Salt: ${result.salt}`, 'info');
+          } catch (error) {
+            log('addressOutput', `Error: ${error.message}`, 'error');
+          }
+        });
+
+      // Sign message
+      document
+        .getElementById('signMsgBtn')
+        .addEventListener('click', async () => {
+          clear('signMsgOutput');
+          try {
+            const message = document.getElementById('signMessage').value;
+
+            if (!message) {
+              log('signMsgOutput', 'Please enter a message', 'warning');
+              return;
+            }
+
+            log('signMsgOutput', 'Signing with Dilithium...', 'info');
+
+            const result = await window.ethereum.request({
+              method: 'wallet_invokeSnap',
+              params: {
+                snapId: SNAP_ID,
+                request: {
+                  method: 'quantum_signMessage',
+                  params: {
+                    message,
+                  },
+                },
+              },
+            });
+
+            log(
+              'signMsgOutput',
+              `Signature Size: ${result.signatureSize} bytes`,
+              'success',
+            );
+            log(
+              'signMsgOutput',
+              `Signature (first 100 chars): ${result.signature.slice(0, 100)}...`,
+              'info',
+            );
+            log('signMsgOutput', `Full signature available in console`, 'info');
+            console.log('Full Dilithium signature:', result.signature);
+          } catch (error) {
+            log('signMsgOutput', `Error: ${error.message}`, 'error');
+          }
+        });
+
+      // Check if MetaMask is installed on load
+      window.addEventListener('load', () => {
+        const checkMetaMask = () => {
+          const status = document.createElement('div');
+          status.style.cssText =
+            'position: fixed; top: 10px; right: 10px; background: #2a2a2a; padding: 10px 15px; border-radius: 6px; border: 1px solid #444; z-index: 1000;';
+
+          if (typeof window.ethereum === 'undefined') {
+            status.innerHTML =
+              '<span style="color: #ff4444;">⚠️ MetaMask Flask Not Detected</span>';
+            document.body.appendChild(status);
+
+            setTimeout(() => {
+              alert(
+                '⚠️ MetaMask Flask Required!\n\nPlease install MetaMask Flask (developer version) from:\nhttps://metamask.io/flask/\n\nNote: Regular MetaMask does NOT support Snaps.',
+              );
+            }, 500);
+          } else {
+            status.innerHTML =
+              '<span style="color: #00ff00;">✓ MetaMask Detected</span>';
+            document.body.appendChild(status);
+
+            // Check if it's Flask by trying to detect snap support
+            if (typeof window.ethereum.request === 'function') {
+              status.innerHTML +=
+                '<br><span style="color: #00d4ff; font-size: 11px;">Ready to connect</span>';
+            }
+          }
+        };
+
+        // Wait a bit for MetaMask to inject
+        setTimeout(checkMetaMask, 100);
+      });
+    </script>
+  </body>
+</html>
