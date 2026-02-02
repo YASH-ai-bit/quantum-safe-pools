@@ -230,11 +230,25 @@ export function useSnap() {
     }
   };
 
+  // Disconnect snap (clear state)
+  const disconnectSnap = useCallback(() => {
+    setSnapState({
+      isFlask: snapState.isFlask,
+      isInstalled: snapState.isInstalled,
+      isConnected: false,
+      publicKey: null,
+      publicKeyHash: null,
+      accountAddress: null,
+    });
+    setError(null);
+  }, [snapState.isFlask, snapState.isInstalled]);
+
   return {
     ...snapState,
     loading,
     error,
     connectSnap,
+    disconnectSnap,
     signMessage,
     sendTransaction,
     refreshData: loadSnapData,

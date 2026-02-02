@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Shield, Download, Check, AlertCircle } from 'lucide-react';
+import { Shield, Download, Check, AlertCircle, LogOut } from 'lucide-react';
 import { useSnap } from '../hooks/useSnap';
 
 export default function ConnectSnapButton() {
-  const { isFlask, isConnected, publicKeyHash, loading, error, connectSnap } = useSnap();
+  const { isFlask, isConnected, publicKeyHash, loading, error, connectSnap, disconnectSnap } = useSnap();
   const [showDetails, setShowDetails] = useState(false);
 
   // Debug logging
@@ -62,10 +62,21 @@ export default function ConnectSnapButton() {
                 </div>
               )}
 
-              <div className="pt-3 border-t border-primary/30">
+              <div className="pt-3 border-t border-primary/30 space-y-3">
                 <p className="text-xs text-foreground/60">
                   Your quantum keys are secure in MetaMask Snap
                 </p>
+                
+                <button
+                  onClick={() => {
+                    disconnectSnap();
+                    setShowDetails(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-all pixel-text text-xs"
+                >
+                  <LogOut className="w-3 h-3" />
+                  DISCONNECT
+                </button>
               </div>
             </div>
           </div>
