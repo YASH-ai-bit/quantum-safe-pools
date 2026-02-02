@@ -88,7 +88,8 @@ async function handleInitialize() {
       publicKeyBytes: publicKey.length,
       publicKeyBits: publicKey.length * 8,
       publicKeyHash: publicKeyHash,
-      publicKeyPreview: publicKeyHex.slice(0, 66) + '...' + publicKeyHex.slice(-64),
+      publicKeyPreview:
+        publicKeyHex.slice(0, 66) + '...' + publicKeyHex.slice(-64),
     },
     accountInfo: {
       salt: salt,
@@ -194,7 +195,7 @@ async function handleTestKeys() {
 
   const publicKey = await getPublicKey();
   const publicKeyHash = await getPublicKeyHash();
-  
+
   // Create deterministic test message
   const testMessage = new Uint8Array(32);
   testMessage.fill(0x01);
@@ -210,7 +211,7 @@ async function handleTestKeys() {
   const verifyStartTime = Date.now();
   const isValid = await verifySignature(testMessage, signature, publicKey);
   const verifyTime = Date.now() - verifyStartTime;
-  
+
   const totalTime = Date.now() - startTime;
   const publicKeyHex = '0x' + Buffer.from(publicKey).toString('hex');
 
@@ -223,32 +224,61 @@ async function handleTestKeys() {
         <Box>
           <Heading>Dilithium Signature Test</Heading>
           <Divider />
-          
-          <Text><Bold>ALGORITHM</Bold></Text>
+
+          <Text>
+            <Bold>ALGORITHM</Bold>
+          </Text>
           <Text>{'Name: CRYSTALS-Dilithium3'}</Text>
           <Text>{'Standard: NIST FIPS 204'}</Text>
-          <Text>{'Security: Level 3 (192-bit classical, 128-bit quantum)'}</Text>
+          <Text>
+            {'Security: Level 3 (192-bit classical, 128-bit quantum)'}
+          </Text>
           <Divider />
-          
-          <Text><Bold>PUBLIC KEY</Bold></Text>
-          <Text>{'Size: ' + String(publicKey.length) + ' bytes (' + String(publicKey.length * 8) + ' bits)'}</Text>
-          <Text>{'Hash: ' + publicKeyHash.slice(0, 18) + '...' + publicKeyHash.slice(-8)}</Text>
+
+          <Text>
+            <Bold>PUBLIC KEY</Bold>
+          </Text>
+          <Text>
+            {'Size: ' +
+              String(publicKey.length) +
+              ' bytes (' +
+              String(publicKey.length * 8) +
+              ' bits)'}
+          </Text>
+          <Text>
+            {'Hash: ' +
+              publicKeyHash.slice(0, 18) +
+              '...' +
+              publicKeyHash.slice(-8)}
+          </Text>
           <Copyable value={publicKeyHash} />
           <Divider />
-          
-          <Text><Bold>TEST MESSAGE</Bold></Text>
+
+          <Text>
+            <Bold>TEST MESSAGE</Bold>
+          </Text>
           <Text>{'Size: ' + String(testMessage.length) + ' bytes'}</Text>
           <Text>{'Content: 0x01 repeated (test vector)'}</Text>
           <Copyable value={testMessageHex} />
           <Divider />
-          
-          <Text><Bold>SIGNATURE</Bold></Text>
-          <Text>{'Size: ' + String(signature.length) + ' bytes (' + String(signature.length * 8) + ' bits)'}</Text>
+
+          <Text>
+            <Bold>SIGNATURE</Bold>
+          </Text>
+          <Text>
+            {'Size: ' +
+              String(signature.length) +
+              ' bytes (' +
+              String(signature.length * 8) +
+              ' bits)'}
+          </Text>
           <Text>{'Preview: ' + signatureHex.slice(0, 22) + '...'}</Text>
           <Copyable value={signatureHex} />
           <Divider />
-          
-          <Text><Bold>VERIFICATION</Bold></Text>
+
+          <Text>
+            <Bold>VERIFICATION</Bold>
+          </Text>
           <Text>{'Status: ' + (isValid ? 'VALID' : 'INVALID')}</Text>
           <Text>{'Sign Time: ' + String(signTime) + 'ms'}</Text>
           <Text>{'Verify Time: ' + String(verifyTime) + 'ms'}</Text>
@@ -271,7 +301,8 @@ async function handleTestKeys() {
       bytes: publicKey.length,
       bits: publicKey.length * 8,
       hash: publicKeyHash,
-      preview: '0x' + Buffer.from(publicKey).toString('hex').slice(0, 64) + '...',
+      preview:
+        '0x' + Buffer.from(publicKey).toString('hex').slice(0, 64) + '...',
     },
     testMessage: {
       hex: testMessageHex,
@@ -320,7 +351,7 @@ async function handleSignMessage(params: any) {
   const signStartTime = Date.now();
   const signature = await signMessage(messageBytes);
   const signTime = Date.now() - signStartTime;
-  
+
   const signatureHex = '0x' + Buffer.from(signature).toString('hex');
   const totalTime = Date.now() - startTime;
 
@@ -450,7 +481,8 @@ async function handleSendTransaction(origin: string, params: any) {
           </Text>
           <Copyable value={userOpHash} />
           <Text>
-            <Bold>Signature Size:</Bold> {String(dilithiumSignature.length) + ' bytes'}
+            <Bold>Signature Size:</Bold>{' '}
+            {String(dilithiumSignature.length) + ' bytes'}
           </Text>
           <Text>Transaction ready to submit to bundler.</Text>
         </Box>

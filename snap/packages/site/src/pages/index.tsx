@@ -327,13 +327,28 @@ const Index = () => {
         {/* Display Results */}
         {publicKeyData && (
           <SuccessMessage>
-            <b>Dilithium-3 Public Key ({publicKeyData.publicKey?.bytes || 0} bytes)</b>
+            <b>
+              Dilithium-3 Public Key ({publicKeyData.publicKey?.bytes || 0}{' '}
+              bytes)
+            </b>
             <ResultBox>
-              <div><b>Algorithm:</b> {publicKeyData.algorithm}</div>
-              <div><b>Standard:</b> {publicKeyData.standard}</div>
-              <div><b>Size:</b> {publicKeyData.publicKey?.bytes} bytes ({publicKeyData.publicKey?.bits} bits)</div>
-              <div><b>Hash:</b> {publicKeyData.publicKey?.hash}</div>
-              <div><b>Preview:</b> {publicKeyData.publicKey?.preview?.first32Bytes}...</div>
+              <div>
+                <b>Algorithm:</b> {publicKeyData.algorithm}
+              </div>
+              <div>
+                <b>Standard:</b> {publicKeyData.standard}
+              </div>
+              <div>
+                <b>Size:</b> {publicKeyData.publicKey?.bytes} bytes (
+                {publicKeyData.publicKey?.bits} bits)
+              </div>
+              <div>
+                <b>Hash:</b> {publicKeyData.publicKey?.hash}
+              </div>
+              <div>
+                <b>Preview:</b> {publicKeyData.publicKey?.preview?.first32Bytes}
+                ...
+              </div>
             </ResultBox>
           </SuccessMessage>
         )}
