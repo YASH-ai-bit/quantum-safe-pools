@@ -1,3 +1,5 @@
-@openzeppelin/=lib/openzeppelin-contracts/
-@account-abstraction/=lib/account-abstraction/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+@account-abstraction/=lib/account-abstraction/contracts/
+@uniswap/v4-core/=lib/v4-core/src/
+@uniswap/v4-core/test/=lib/v4-core/test/
 forge-std/=lib/forge-std/src/
