@@ -13,6 +13,19 @@ export function useQuantumRegistry() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper to check if Flask is available
+  const isFlaskAvailable = async (): Promise<boolean> => {
+    const provider = (window as any).ethereum;
+    if (!provider) return false;
+    
+    try {
+      await provider.request({ method: 'wallet_getSnaps' });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Check if an address is quantum-safe
   const checkQuantumSafe = useCallback(async (address: string): Promise<boolean> => {
     if (!address || address === '0x0000000000000000000000000000000000000000') {
@@ -23,9 +36,9 @@ export function useQuantumRegistry() {
     setError(null);
 
     try {
-      // Using ethers v6 syntax
+      // Using ethers v6 syntax - Read-only, no connection needed
       const { ethers } = await import('ethers');
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider((window as any).ethereum, 'any');
       
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
@@ -46,12 +59,18 @@ export function useQuantumRegistry() {
 
   // Register a quantum public key hash
   const register = useCallback(async (publicKeyHash: string) => {
+    // Check if Flask is available before proceeding
+    const flaskAvailable = await isFlaskAvailable();
+    if (!flaskAvailable) {
+      throw new Error('MetaMask Flask is required for registration');
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       const { ethers } = await import('ethers');
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider((window as any).ethereum, 'any');
       const signer = await provider.getSigner();
       
       const registry = new ethers.Contract(
@@ -77,7 +96,7 @@ export function useQuantumRegistry() {
   const getTotalRegistered = useCallback(async (): Promise<number> => {
     try {
       const { ethers } = await import('ethers');
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider((window as any).ethereum, 'any');
       
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
