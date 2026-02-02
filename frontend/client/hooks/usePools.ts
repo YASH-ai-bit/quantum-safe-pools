@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { CONTRACTS, RPC_URLS, CHAIN_ID } from '@/shared/contracts';
+import { CONTRACTS, RPC_URLS, CHAIN_ID } from '@shared/contracts';
 import { useSnap } from './useSnap';
 
 // Uniswap V4 Types

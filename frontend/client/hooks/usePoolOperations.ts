@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { CONTRACTS, RPC_URLS } from '@/shared/contracts';
+import { CONTRACTS, RPC_URLS } from '@shared/contracts';
 import { useSnap } from './useSnap';
 
 // Helper to get Flask provider
