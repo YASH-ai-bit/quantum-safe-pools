@@ -28,26 +28,42 @@ export function useSnap() {
     const checkFlask = async () => {
       const provider = (window as any).ethereum;
       if (!provider) {
+        setSnapState((prev) => ({ ...prev, isFlask: false }));
         return;
       }
 
       try {
-        const clientVersion = await provider.request({
-          method: 'web3_clientVersion',
+        // Try to call wallet_getSnaps - this method only exists in Flask
+        await provider.request({
+          method: 'wallet_getSnaps',
         });
 
-        const isFlask = clientVersion?.includes('flask');
-        setSnapState((prev) => ({ ...prev, isFlask }));
-
-        if (isFlask) {
-          await checkSnapInstalled();
-        }
+        // If we get here, Flask is installed
+        setSnapState((prev) => ({ ...prev, isFlask: true }));
+        await checkSnapInstalled();
       } catch (err) {
-        console.error('Error checking Flask:', err);
+        // If this fails, Flask is not installed
+        console.log('Flask not detected:', err);
+        setSnapState((prev) => ({ ...prev, isFlask: false }));
       }
     };
 
     checkFlask();
+    
+    // Also listen for account changes to re-check
+    const handleAccountsChanged = () => {
+      checkFlask();
+    };
+    
+    if ((window as any).ethereum) {
+      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
+    }
+    
+    return () => {
+      if ((window as any).ethereum) {
+        (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      }
+    };
   }, []);
 
   // Check if snap is already installed

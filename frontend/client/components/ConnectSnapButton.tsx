@@ -6,6 +6,9 @@ export default function ConnectSnapButton() {
   const { isFlask, isConnected, publicKeyHash, loading, error, connectSnap } = useSnap();
   const [showDetails, setShowDetails] = useState(false);
 
+  // Debug logging
+  console.log('ConnectSnapButton state:', { isFlask, isConnected, loading, error });
+
   const handleConnect = async () => {
     await connectSnap();
   };
@@ -13,15 +16,20 @@ export default function ConnectSnapButton() {
   // Not Flask - show warning
   if (!isFlask) {
     return (
-      <a
-        href="https://metamask.io/flask/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 border-2 border-red-500 text-red-500 hover:bg-red-500/10 transition-all pixel-text text-sm glitch-hover"
-      >
-        <AlertCircle className="w-4 h-4" />
-        INSTALL_FLASK
-      </a>
+      <div className="flex flex-col items-end gap-2">
+        <a
+          href="https://metamask.io/flask/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-4 py-2 border-2 border-red-500 text-red-500 hover:bg-red-500/10 transition-all pixel-text text-sm glitch-hover"
+        >
+          <AlertCircle className="w-4 h-4" />
+          INSTALL_FLASK
+        </a>
+        <p className="text-xs text-red-500/60">
+          MetaMask Flask not detected
+        </p>
+      </div>
     );
   }
 
