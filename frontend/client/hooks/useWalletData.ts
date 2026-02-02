@@ -1,9 +1,10 @@
 import { useAccount, useBalance, useReadContract } from 'wagmi';
-import { usePublicClient } from 'wagmi';
-import { formatUnits, parseAbiItem } from 'viem';
+import { formatUnits } from 'viem';
 import { sepolia } from 'wagmi/chains';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { usePools } from './usePools';
+import { useSnap } from './useSnap';
+import { CONTRACTS } from '@shared/contracts';
 
 // ERC20 ABI
 const ERC20_ABI = [
@@ -21,6 +22,49 @@ const ERC20_ABI = [
     inputs: [],
     outputs: [{ name: '', type: 'uint8' }],
   },
+  {
+    name: 'symbol',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }],
+  },
+] as const;
+
+// PoolManager ABI for position queries
+const POOL_MANAGER_ABI = [
+  {
+    name: 'ModifyLiquidity',
+    type: 'event',
+    inputs: [
+      { name: 'id', type: 'bytes32', indexed: true },
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'tickLower', type: 'int24', indexed: false },
+      { name: 'tickUpper', type: 'int24', indexed: false },
+      { name: 'liquidityDelta', type: 'int256', indexed: false },
+      { name: 'salt', type: 'bytes32', indexed: false },
+    ],
+  },
+  {
+    name: 'getSlot0',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+    outputs: [
+      { name: 'sqrtPriceX96', type: 'uint160' },
+      { name: 'tick', type: 'int24' },
+      { name: 'protocolFee', type: 'uint24' },
+      { name: 'lpFee', type: 'uint24' },
+      { name: 'hookFee', type: 'uint24' },
+    ],
+  },
+  {
+    name: 'getLiquidity',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+    outputs: [{ name: 'liquidity', type: 'uint128' }],
+  },
 ] as const;
 
 interface TokenBalance {
@@ -29,16 +73,59 @@ interface TokenBalance {
   amount: string;
   value: string;
   address: string;
+  isLP?: boolean;
+  poolId?: string;
 }
 
+interface LPPosition {
+  poolId: string;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+  poolTVL: string;
+}
+
+// Sepolia USDC address
+const SEPOLIA_USDC = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+
 export function useWalletData() {
-  const { address, isConnected } = useAccount();
-  const { data: ethBalance } = useBalance({
+  const { address, isConnected: wagmiConnected } = useAccount();
+  const { isConnected: snapConnected } = useSnap();
+  const isConnected = snapConnected || wagmiConnected;
+  
+  const { pools } = usePools();
+
+  // Use Wagmi hooks for balances (no CORS issues)
+  const { data: ethBalanceData } = useBalance({
     address,
     chainId: sepolia.id,
+    query: {
+      enabled: !!address && isConnected,
+      refetchInterval: 30000, // Refetch every 30 seconds
+    },
   });
-  const publicClient = usePublicClient({ chainId: sepolia.id });
-  const { pools } = usePools();
+
+  const { data: usdcBalanceData } = useReadContract({
+    address: SEPOLIA_USDC as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: sepolia.id,
+    query: {
+      enabled: !!address && isConnected,
+      refetchInterval: 30000, // Refetch every 30 seconds
+    },
+  });
+
+  const { data: usdcDecimalsData } = useReadContract({
+    address: SEPOLIA_USDC as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'decimals',
+    chainId: sepolia.id,
+    query: {
+      enabled: !!address && isConnected,
+    },
+  });
 
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [totalBalance, setTotalBalance] = useState<string>('0.00');
@@ -46,25 +133,22 @@ export function useWalletData() {
   const [volume24h, setVolume24h] = useState<string>('0.00');
   const [poolsJoined, setPoolsJoined] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [lpPositions, setLpPositions] = useState<LPPosition[]>([]);
 
-  // Common token addresses on Sepolia
-  const TOKEN_ADDRESSES: Record<string, { address: string; symbol: string; name: string }> = {
-    WETH: {
-      address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
-      symbol: 'WETH',
-      name: 'Wrapped Ethereum',
-    },
-    USDC: {
-      address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-      symbol: 'USDC',
-      name: 'USD Coin',
-    },
-  };
+  // LP positions - simplified for now (would need event fetching via provider)
+  useEffect(() => {
+    // For now, just count pools user might have positions in
+    // In production, would fetch from events via provider
+    setLpPositions([]);
+    setPoolsJoined(0);
+  }, [isConnected, pools.length]);
 
-  // Fetch token balances
-  const fetchTokenBalances = useCallback(async () => {
-    if (!address || !publicClient || !isConnected) {
+  // Calculate token balances from Wagmi data (runs only when data changes)
+  useEffect(() => {
+    if (!address || !isConnected) {
       setTokenBalances([]);
+      setTotalBalance('0.00');
+      setLoading(false);
       return;
     }
 
@@ -72,47 +156,57 @@ export function useWalletData() {
     try {
       const balances: TokenBalance[] = [];
 
-      // Add ETH balance
-      if (ethBalance) {
-        const ethValue = parseFloat(formatUnits(ethBalance.value, 18));
-        balances.push({
-          symbol: 'ETH',
-          name: 'Ethereum',
-          amount: ethValue.toFixed(4),
-          value: `$${(ethValue * 3000).toFixed(2)}`, // Simplified price
-          address: '0x0000000000000000000000000000000000000000',
-        });
-      }
+      // Add ETH balance (Sepolia ETH) - always show, even if 0
+      const ethValue = ethBalanceData?.value 
+        ? parseFloat(formatUnits(ethBalanceData.value, 18))
+        : 0;
+      balances.push({
+        symbol: 'ETH',
+        name: 'Sepolia ETH',
+        amount: ethValue.toFixed(6),
+        value: `$${(ethValue * 3000).toFixed(2)}`, // Simplified price - would use oracle
+        address: '0x0000000000000000000000000000000000000000',
+      });
 
-      // Fetch token balances
-      for (const [key, token] of Object.entries(TOKEN_ADDRESSES)) {
-        try {
-          const [balance, decimals] = await Promise.all([
-            publicClient.readContract({
-              address: token.address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'balanceOf',
-              args: [address],
-            }),
-            publicClient.readContract({
-              address: token.address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'decimals',
-            }),
-          ]);
+      // Add USDC balance - always show, even if 0
+      const usdcDecimals = usdcDecimalsData ? Number(usdcDecimalsData) : 6;
+      const usdcValue = usdcBalanceData
+        ? parseFloat(formatUnits(usdcBalanceData, usdcDecimals))
+        : 0;
+      balances.push({
+        symbol: 'USDC',
+        name: 'USD Coin',
+        amount: usdcValue.toFixed(2),
+        value: `$${usdcValue.toFixed(2)}`, // USDC is 1:1 with USD
+        address: SEPOLIA_USDC,
+      });
 
-          const amount = parseFloat(formatUnits(balance, decimals));
-          if (amount > 0) {
+      // Add LP positions as LP tokens
+      for (const position of lpPositions) {
+        if (position.liquidity > 0n) {
+          const pool = pools.find(p => p.id === position.poolId);
+          if (pool) {
+            // Calculate LP token value based on pool share
+            const poolLiquidity = pool.liquidity || 0n;
+            const userShare = poolLiquidity > 0n 
+              ? Number(position.liquidity) / Number(poolLiquidity)
+              : 0;
+            
+            const poolTVL = parseFloat(pool.tvl || '0');
+            const lpValue = poolTVL * userShare;
+
+            const poolName = `${pool.token0Symbol || 'TOKEN0'}-${pool.token1Symbol || 'TOKEN1'}`;
+            
             balances.push({
-              symbol: token.symbol,
-              name: token.name,
-              amount: amount.toFixed(2),
-              value: `$${amount.toFixed(2)}`, // Simplified - would need price oracle
-              address: token.address,
+              symbol: 'LP',
+              name: `${poolName} LP`,
+              amount: formatUnits(position.liquidity, 18),
+              value: `$${lpValue.toFixed(2)}`,
+              address: position.poolId,
+              isLP: true,
+              poolId: position.poolId,
             });
           }
-        } catch (err) {
-          console.error(`Error fetching ${key} balance:`, err);
         }
       }
 
@@ -121,15 +215,17 @@ export function useWalletData() {
       // Calculate total balance
       const total = balances.reduce((sum, token) => {
         const value = parseFloat(token.value.replace('$', '').replace(',', ''));
-        return sum + value;
+        return sum + (isNaN(value) ? 0 : value);
       }, 0);
       setTotalBalance(total.toFixed(2));
     } catch (err) {
-      console.error('Error fetching wallet data:', err);
+      // Silently handle errors
+      setTokenBalances([]);
+      setTotalBalance('0.00');
     } finally {
       setLoading(false);
     }
-  }, [address, publicClient, isConnected, ethBalance]);
+  }, [address, isConnected, ethBalanceData, usdcBalanceData, usdcDecimalsData, lpPositions, pools]);
 
   // Calculate statistics from pools
   useEffect(() => {
@@ -139,20 +235,12 @@ export function useWalletData() {
         return sum + parseFloat(pool.volume24h || '0');
       }, 0);
       setVolume24h(totalVolume.toFixed(2));
-
-      // Count pools user has joined (simplified - would need to check LP positions)
-      setPoolsJoined(0); // Would need to query LP token balances
     } else {
       setVolume24h('0.00');
-      setPoolsJoined(0);
     }
   }, [pools]);
 
-  useEffect(() => {
-    fetchTokenBalances();
-    const interval = setInterval(fetchTokenBalances, 30000);
-    return () => clearInterval(interval);
-  }, [fetchTokenBalances]);
+  // No additional effects needed - Wagmi handles refetching automatically
 
   return {
     totalBalance,
@@ -160,7 +248,11 @@ export function useWalletData() {
     volume24h,
     poolsJoined,
     tokenBalances,
+    lpPositions,
     loading,
     isConnected,
+    refetch: () => {
+      // Wagmi handles refetching automatically via query refetchInterval
+    },
   };
 }
