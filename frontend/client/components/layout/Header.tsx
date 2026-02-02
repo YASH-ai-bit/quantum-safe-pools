@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Menu, X, Wallet } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import ConnectSnapButton from "../ConnectSnapButton";
 
@@ -12,11 +12,11 @@ export default function Header() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="relative">
-              <div className="relative bg-black border-2 border-primary p-2 glitch-hover">
-                <Wallet className="w-6 h-6 text-primary" />
-              </div>
-            </div>
+            <img 
+              src="/logo.svg" 
+              alt="Quantum Vault Logo" 
+              className="w-10 h-10 glitch-hover"
+            />
             <span className="text-xl font-bold pixel-text hidden sm:inline text-primary">
               QUANTUM_VAULT
             </span>
