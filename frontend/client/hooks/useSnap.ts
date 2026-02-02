@@ -147,7 +147,7 @@ export function useSnap() {
           request: {
             method: 'quantum_getAccountAddress',
             params: {
-              factoryAddress: '0x0000000000000000000000000000000000000000', // Update
+              factoryAddress: '0x805cfcecaEbe8CA2B731bCeeD79e2A98142bD5D8',
             },
           },
         },
