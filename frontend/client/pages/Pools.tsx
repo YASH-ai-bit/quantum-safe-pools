@@ -1,72 +1,42 @@
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { Search, Plus, TrendingUp, Users, BarChart3, Lock, ArrowRight } from "lucide-react";
+import { Search, Plus, TrendingUp, Users, BarChart3, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { usePools } from "@/hooks/usePools";
+import { ethers } from "ethers";
+
+// Common token addresses on Sepolia (using WETH and USDC test tokens)
+const TOKEN_SYMBOLS: Record<string, string> = {
+  '0x0000000000000000000000000000000000000000': 'ETH',
+  '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984': 'UNI',
+  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': 'USDC',
+};
+
+function formatAddress(address: string): string {
+  if (!address) return 'Unknown';
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getTokenSymbol(address: string): string {
+  return TOKEN_SYMBOLS[address] || formatAddress(address);
+}
 
 export default function Pools() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { pools, loading, error } = usePools();
 
-  const pools = [
-    {
-      id: 1,
-      pair: "BTC-ETH",
-      tvl: "$45.2M",
-      apy: "18.5%",
-      volume24h: "$8.3M",
-      users: 2340,
-      fee: "0.30%",
-    },
-    {
-      id: 2,
-      pair: "ETH-USDC",
-      tvl: "$78.5M",
-      apy: "22.3%",
-      volume24h: "$12.5M",
-      users: 5120,
-      fee: "0.30%",
-    },
-    {
-      id: 3,
-      pair: "BTC-USDC",
-      tvl: "$62.1M",
-      apy: "19.8%",
-      volume24h: "$10.2M",
-      users: 3890,
-      fee: "0.30%",
-    },
-    {
-      id: 4,
-      pair: "ETH-USDT",
-      tvl: "$55.8M",
-      apy: "20.5%",
-      volume24h: "$9.7M",
-      users: 4210,
-      fee: "0.25%",
-    },
-    {
-      id: 5,
-      pair: "BTC-USDT",
-      tvl: "$41.3M",
-      apy: "17.2%",
-      volume24h: "$7.8M",
-      users: 2890,
-      fee: "0.25%",
-    },
-    {
-      id: 6,
-      pair: "USDC-USDT",
-      tvl: "$38.9M",
-      apy: "5.2%",
-      volume24h: "$15.3M",
-      users: 6540,
-      fee: "0.01%",
-    },
-  ];
+  // Calculate aggregate stats
+  const totalTVL = pools.reduce((sum, pool) => sum + parseFloat(pool.tvl || '0'), 0);
+  const totalVolume = pools.reduce((sum, pool) => sum + parseFloat(pool.volume24h || '0'), 0);
+  const avgAPY = pools.length > 0 
+    ? pools.reduce((sum, pool) => sum + parseFloat(pool.apy || '0'), 0) / pools.length 
+    : 0;
 
-  const filteredPools = pools.filter((pool) =>
-    pool.pair.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPools = pools.filter((pool) => {
+    const pair = `${getTokenSymbol(pool.poolKey.currency0)}-${getTokenSymbol(pool.poolKey.currency1)}`;
+    return pair.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -116,78 +86,108 @@ export default function Pools() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="secondary-border p-6 text-center glitch-hover">
               <p className="text-foreground/60 text-sm mb-2 pixel-text">$ TVL</p>
-              <p className="text-3xl font-bold text-foreground pixel-text">$395.8M</p>
+              <p className="text-3xl font-bold text-foreground pixel-text">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `$${totalTVL.toFixed(2)}`}
+              </p>
             </div>
             <div className="secondary-border p-6 text-center glitch-hover">
               <p className="text-foreground/60 text-sm mb-2 pixel-text">$ VOLUME</p>
-              <p className="text-3xl font-bold text-foreground pixel-text">$63.8M</p>
+              <p className="text-3xl font-bold text-foreground pixel-text">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `$${totalVolume.toFixed(2)}`}
+              </p>
             </div>
             <div className="secondary-border p-6 text-center glitch-hover">
               <p className="text-foreground/60 text-sm mb-2 pixel-text">$ AVG_APY</p>
-              <p className="text-3xl font-bold text-primary pixel-text">16.9%</p>
+              <p className="text-3xl font-bold text-primary pixel-text">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `${avgAPY.toFixed(2)}%`}
+              </p>
             </div>
             <div className="secondary-border p-6 text-center glitch-hover">
               <p className="text-foreground/60 text-sm mb-2 pixel-text">$ POOLS</p>
-              <p className="text-3xl font-bold text-foreground pixel-text">{filteredPools.length}</p>
+              <p className="text-3xl font-bold text-foreground pixel-text">
+                {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : filteredPools.length}
+              </p>
             </div>
           </div>
 
+          {/* Error State */}
+          {error && (
+            <div className="border-2 border-red-500 p-4 mb-8 glitch-hover">
+              <p className="text-red-500 pixel-text">Error: {error}</p>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {loading && pools.length === 0 && (
+            <div className="text-center py-12">
+              <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2 pixel-text text-foreground">LOADING_POOLS...</h3>
+            </div>
+          )}
+
           {/* Pools Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPools.map((pool) => (
-              <div
-                key={pool.id}
-                className="border-2 border-primary p-6 group hover:bg-primary/10 transition-all duration-300 flex flex-col glitch-hover"
-              >
-                {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="pixel-text">
-                    <h3 className="text-xl font-bold mb-1 text-foreground">{pool.pair}</h3>
-                    <p className="text-foreground/60 text-sm">{pool.fee} fee</p>
-                  </div>
-                  <div className="p-2 border-2 border-primary group-hover:bg-primary/20 transition">
-                    <TrendingUp className="w-5 h-5 text-primary" />
-                  </div>
-                </div>
+          {!loading && filteredPools.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredPools.map((pool) => {
+                const pair = `${getTokenSymbol(pool.poolKey.currency0)}-${getTokenSymbol(pool.poolKey.currency1)}`;
+                const feePercent = (pool.poolKey.fee / 10000).toFixed(2);
+                return (
+                  <div
+                    key={pool.id}
+                    className="border-2 border-primary p-6 group hover:bg-primary/10 transition-all duration-300 flex flex-col glitch-hover"
+                  >
+                    {/* Header */}
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="pixel-text">
+                        <h3 className="text-xl font-bold mb-1 text-foreground">{pair}</h3>
+                        <p className="text-foreground/60 text-sm">{feePercent}% fee</p>
+                      </div>
+                      <div className="p-2 border-2 border-primary group-hover:bg-primary/20 transition">
+                        <TrendingUp className="w-5 h-5 text-primary" />
+                      </div>
+                    </div>
 
-                {/* Stats */}
-                <div className="space-y-3 mb-6 flex-1 pixel-text">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-foreground/60">tvl</span>
-                    <span className="font-bold text-foreground">{pool.tvl}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-foreground/60">apy</span>
-                    <span className="font-bold text-primary">{pool.apy}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-foreground/60">24h_vol</span>
-                    <span className="font-bold text-foreground">{pool.volume24h}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-foreground/60">providers</span>
-                    <span className="font-bold flex items-center gap-1 text-foreground">
-                      <Users className="w-4 h-4" />
-                      {pool.users.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                    {/* Stats */}
+                    <div className="space-y-3 mb-6 flex-1 pixel-text">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-foreground/60">tvl</span>
+                        <span className="font-bold text-foreground">${pool.tvl || '0.00'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-foreground/60">apy</span>
+                        <span className="font-bold text-primary">{pool.apy || '0.00'}%</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-foreground/60">24h_vol</span>
+                        <span className="font-bold text-foreground">${pool.volume24h || '0.00'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-foreground/60">fees_24h</span>
+                        <span className="font-bold text-foreground">${pool.fees24h || '0.00'}</span>
+                      </div>
+                    </div>
 
-                {/* Action Button */}
-                <button className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all duration-300 flex items-center justify-center gap-2 group/btn pixel-text text-sm glitch-hover">
-                  ADD_LIQUIDITY
-                  <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            ))}
-          </div>
+                    {/* Action Button */}
+                    <Link to={`/pool/${pool.id}`}>
+                      <button className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all duration-300 flex items-center justify-center gap-2 group/btn pixel-text text-sm glitch-hover">
+                        VIEW_POOL
+                        <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                      </button>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-          {filteredPools.length === 0 && (
+          {!loading && filteredPools.length === 0 && (
             <div className="text-center py-12">
               <BarChart3 className="w-12 h-12 text-foreground/40 mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2 pixel-text text-foreground">NO_POOLS_FOUND</h3>
               <p className="text-foreground/60 pixel-text">
-                Try adjusting your search or {" "}
+                {pools.length === 0 
+                  ? "No pools created yet. " 
+                  : "Try adjusting your search or "}
                 <Link to="/create-pool" className="text-primary hover:text-primary/80 transition">
                   create a new pool
                 </Link>

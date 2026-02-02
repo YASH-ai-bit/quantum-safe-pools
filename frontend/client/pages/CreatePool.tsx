@@ -1,8 +1,20 @@
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { ArrowRight, Plus, Info } from "lucide-react";
+import { ArrowRight, Plus, Info, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
+import { usePoolOperations } from "@/hooks/usePoolOperations";
+import { useSnap } from "@/hooks/useSnap";
+import { ethers } from "ethers";
+
+// Common token addresses on Sepolia
+const TOKEN_ADDRESSES: Record<string, string> = {
+  'ETH': '0x0000000000000000000000000000000000000000',
+  'WETH': '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', // Sepolia WETH
+  'USDC': '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
+  'USDT': '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0', // Sepolia USDT
+  'DAI': '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6', // Sepolia DAI
+};
 
 export default function CreatePool() {
   const [step, setStep] = useState(1);
@@ -11,13 +23,17 @@ export default function CreatePool() {
   const [amountA, setAmountA] = useState("");
   const [amountB, setAmountB] = useState("");
   const [fee, setFee] = useState("0.30");
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { createPool, loading } = usePoolOperations();
+  const { isConnected } = useSnap();
 
   const tokens = [
-    { symbol: "BTC", name: "Bitcoin (QS)" },
-    { symbol: "ETH", name: "Ethereum (QS)" },
-    { symbol: "USDC", name: "USD Coin" },
-    { symbol: "USDT", name: "Tether" },
-    { symbol: "DAI", name: "Dai Stablecoin" },
+    { symbol: "ETH", name: "Ethereum", address: TOKEN_ADDRESSES.ETH },
+    { symbol: "WETH", name: "Wrapped Ethereum", address: TOKEN_ADDRESSES.WETH },
+    { symbol: "USDC", name: "USD Coin", address: TOKEN_ADDRESSES.USDC },
+    { symbol: "USDT", name: "Tether", address: TOKEN_ADDRESSES.USDT },
+    { symbol: "DAI", name: "Dai Stablecoin", address: TOKEN_ADDRESSES.DAI },
   ];
 
   const fees = [
@@ -30,9 +46,46 @@ export default function CreatePool() {
 
   const availableTokensForB = tokens.filter((t) => t.symbol !== tokenA);
 
-  const handleCreatePool = (e: React.FormEvent) => {
+  const handleCreatePool = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`Pool created: ${tokenA}-${tokenB} with ${fee}% fee`);
+    if (!isConnected) {
+      setError('Please connect MetaMask Flask first');
+      return;
+    }
+
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const tokenAObj = tokens.find(t => t.symbol === tokenA);
+      const tokenBObj = tokens.find(t => t.symbol === tokenB);
+      
+      if (!tokenAObj || !tokenBObj) {
+        throw new Error('Invalid token selection');
+      }
+
+      // Calculate initial price (simplified - would use actual price oracle)
+      // For now, use 1:1 ratio
+      const initialPrice = ethers.parseEther('1'); // sqrtPriceX96 format would need conversion
+      
+      // Fee in basis points (0.30% = 3000)
+      const feeBps = Math.round(parseFloat(fee) * 100);
+      const tickSpacing = 60; // Standard tick spacing
+
+      const receipt = await createPool(
+        tokenAObj.address,
+        tokenBObj.address,
+        feeBps,
+        tickSpacing,
+        initialPrice
+      );
+
+      setTxHash(receipt.hash);
+      setStep(4); // Success step
+    } catch (err: any) {
+      setError(err.message || 'Failed to create pool');
+      setStep(5); // Error step
+    }
   };
 
   return (
@@ -264,6 +317,15 @@ export default function CreatePool() {
                   </p>
                 </div>
 
+                {error && (
+                  <div className="p-4 border-2 border-red-500 bg-red-500/10">
+                    <div className="flex items-center gap-2 text-red-500 pixel-text">
+                      <AlertCircle className="w-5 h-5" />
+                      <p>{error}</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div className="p-4 border-2 border-primary bg-black">
                     <p className="text-foreground/60 text-sm mb-2 pixel-text">$ pool_configuration</p>
@@ -278,11 +340,11 @@ export default function CreatePool() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground/80">{tokenA}_initial</span>
-                        <span className="font-bold text-foreground">{amountA}</span>
+                        <span className="font-bold text-foreground">{amountA || '0'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground/80">{tokenB}_initial</span>
-                        <span className="font-bold text-foreground">{amountB}</span>
+                        <span className="font-bold text-foreground">{amountB || '0'}</span>
                       </div>
                     </div>
                   </div>
@@ -305,17 +367,81 @@ export default function CreatePool() {
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="flex-1 py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text"
+                    disabled={loading}
+                    className="flex-1 py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50"
                   >
                     BACK
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3 border-2 border-primary text-primary font-bold hover:bg-primary hover:text-black transition-all flex items-center justify-center gap-2 pixel-text"
+                    disabled={loading || !isConnected}
+                    className="flex-1 py-3 border-2 border-primary text-primary font-bold hover:bg-primary hover:text-black transition-all flex items-center justify-center gap-2 pixel-text disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    CREATE_POOL
-                    <ArrowRight className="w-4 h-4" />
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        CREATING...
+                      </>
+                    ) : (
+                      <>
+                        CREATE_POOL
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Success Step */}
+            {step === 4 && txHash && (
+              <div className="space-y-6">
+                <div className="pixel-text text-center">
+                  <CheckCircle className="w-16 h-16 text-primary mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">POOL_CREATED_SUCCESSFULLY</h2>
+                  <p className="text-foreground/60 mb-4">
+                    Your pool has been created on-chain
+                  </p>
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:text-primary/80 transition pixel-text text-sm"
+                  >
+                    View on Etherscan: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                  </a>
+                </div>
+                <Link to="/pools">
+                  <button className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text">
+                    VIEW_POOLS
+                  </button>
+                </Link>
+              </div>
+            )}
+
+            {/* Error Step */}
+            {step === 5 && error && (
+              <div className="space-y-6">
+                <div className="pixel-text text-center">
+                  <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">POOL_CREATION_FAILED</h2>
+                  <p className="text-foreground/60 mb-4">{error}</p>
+                </div>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => {
+                      setStep(3);
+                      setError(null);
+                    }}
+                    className="flex-1 py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text"
+                  >
+                    TRY_AGAIN
+                  </button>
+                  <Link to="/pools" className="flex-1">
+                    <button className="w-full py-3 border-2 border-primary/50 text-primary/50 font-bold transition-all pixel-text">
+                      BACK_TO_POOLS
+                    </button>
+                  </Link>
                 </div>
               </div>
             )}
