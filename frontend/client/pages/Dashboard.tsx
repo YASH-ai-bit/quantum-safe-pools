@@ -1,43 +1,50 @@
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { Send, Download, TrendingUp, Wallet, BarChart3, DollarSign, Eye, EyeOff } from "lucide-react";
+import { Send, Download, TrendingUp, Wallet, BarChart3, DollarSign, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useWalletData } from "@/hooks/useWalletData";
+import { usePools } from "@/hooks/usePools";
+import { usePublicClient } from 'wagmi';
+import { sepolia } from 'wagmi/chains';
 
 export default function Dashboard() {
   const [hideBalance, setHideBalance] = useState(false);
+  const { totalBalance, portfolioChange, volume24h, poolsJoined, tokenBalances, loading: walletLoading } = useWalletData();
+  const { pools, loading: poolsLoading } = usePools();
 
+  // Generate portfolio chart data (simplified - would need historical data)
   const portfolioData = [
-    { name: "Jan", value: 18000 },
-    { name: "Feb", value: 21000 },
-    { name: "Mar", value: 19500 },
-    { name: "Apr", value: 23000 },
-    { name: "May", value: 24856 },
+    { name: "Jan", value: 0 },
+    { name: "Feb", value: 0 },
+    { name: "Mar", value: 0 },
+    { name: "Apr", value: 0 },
+    { name: "May", value: parseFloat(totalBalance) || 0 },
   ];
 
-  const allocationData = [
-    { name: "Bitcoin (QS)", value: 45 },
-    { name: "Ethereum (QS)", value: 35 },
-    { name: "Stablecoins", value: 15 },
-    { name: "LP Tokens", value: 5 },
-  ];
+  // Calculate asset allocation from token balances
+  const totalValue = parseFloat(totalBalance) || 0;
+  const allocationData = tokenBalances.length > 0
+    ? tokenBalances.map(token => ({
+        name: token.name,
+        value: totalValue > 0 ? Math.round((parseFloat(token.value.replace('$', '').replace(',', '')) / totalValue) * 100) : 0,
+      }))
+    : [{ name: "No Assets", value: 100 }];
 
   const colors = ["#00ff00", "#00ff00", "#00ff00", "#00ff00"];
 
-  const recentTransactions = [
-    { id: 1, type: "Swap", asset: "BTC → ETH", amount: "0.5 BTC", date: "Today", status: "Completed" },
-    { id: 2, type: "Deposit", asset: "USDC", amount: "10,000 USDC", date: "Yesterday", status: "Completed" },
-    { id: 3, type: "Liquidity", asset: "ETH-USDC Pool", amount: "2 ETH", date: "2 days ago", status: "Completed" },
-    { id: 4, type: "Withdrawal", asset: "BTC", amount: "0.25 BTC", date: "3 days ago", status: "Completed" },
-  ];
+  // Recent transactions (would need to fetch from chain)
+  const recentTransactions: Array<{ id: number; type: string; asset: string; amount: string; date: string; status: string }> = [];
 
-  const assets = [
-    { symbol: "BTC", name: "Bitcoin (QS)", amount: "2.45", value: "$10,745", change: "+8.5%" },
-    { symbol: "ETH", name: "Ethereum (QS)", amount: "12.8", value: "$9,216", change: "+12.3%" },
-    { symbol: "USDC", name: "USD Coin", amount: "3,500", value: "$3,500", change: "0.0%" },
-    { symbol: "LPT", name: "LP Tokens", amount: "5,420", value: "$1,395", change: "+15.2%" },
-  ];
+  // Assets from token balances
+  const assets = tokenBalances.map((token, index) => ({
+    symbol: token.symbol,
+    name: token.name,
+    amount: token.amount,
+    value: token.value,
+    change: "0.0%", // Would need price history
+  }));
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -59,7 +66,11 @@ export default function Dashboard() {
                   <div className="pixel-text">
                     <p className="text-foreground/60 text-sm font-semibold mb-2">$ TOTAL_BALANCE</p>
                     <h2 className="text-5xl font-bold text-foreground">
-                      {hideBalance ? "****" : "$24,856.34"}
+                      {walletLoading ? (
+                        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                      ) : (
+                        hideBalance ? "****" : `$${totalBalance || '0.00'}`
+                      )}
                     </h2>
                   </div>
                   <button
@@ -72,7 +83,7 @@ export default function Dashboard() {
 
                 <p className="text-primary font-semibold mb-8 flex items-center gap-2 pixel-text">
                   <TrendingUp className="w-4 h-4" />
-                  +12.5% this month
+                  {parseFloat(portfolioChange) >= 0 ? '+' : ''}{portfolioChange || '0.00'}% this month
                 </p>
 
                 <div className="flex gap-4 pt-6 border-t-2 border-primary">
@@ -94,15 +105,29 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="secondary-border p-6 glitch-hover">
                 <p className="text-foreground/60 text-sm mb-2 pixel-text">$ PORTFOLIO_CHANGE</p>
-                <p className="text-3xl font-bold text-primary pixel-text">+$3,105.20</p>
+                {walletLoading ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                ) : (
+                  <p className="text-3xl font-bold text-primary pixel-text">
+                    {parseFloat(portfolioChange) >= 0 ? '+' : ''}${portfolioChange || '0.00'}
+                  </p>
+                )}
               </div>
               <div className="secondary-border p-6 glitch-hover">
                 <p className="text-foreground/60 text-sm mb-2 pixel-text">$ 24H_VOLUME</p>
-                <p className="text-3xl font-bold text-foreground pixel-text">$562.45</p>
+                {walletLoading ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                ) : (
+                  <p className="text-3xl font-bold text-foreground pixel-text">${volume24h || '0.00'}</p>
+                )}
               </div>
               <div className="secondary-border p-6 glitch-hover">
                 <p className="text-foreground/60 text-sm mb-2 pixel-text">$ POOLS_JOINED</p>
-                <p className="text-3xl font-bold text-foreground pixel-text">3</p>
+                {walletLoading ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                ) : (
+                  <p className="text-3xl font-bold text-foreground pixel-text">{poolsJoined || 0}</p>
+                )}
               </div>
             </div>
           </div>
@@ -179,23 +204,37 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.map((asset) => (
-                    <tr key={asset.symbol} className="tertiary-border border-b glitch-hover">
-                      <td className="py-4 px-4">
-                        <div className="pixel-text">
-                          <p className="font-semibold text-foreground">{asset.name}</p>
-                          <p className="text-foreground/60 text-sm">{asset.symbol}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-right pixel-text text-foreground">{asset.amount}</td>
-                      <td className="py-4 px-4 text-right font-semibold pixel-text text-foreground">{asset.value}</td>
-                      <td className="py-4 px-4 text-right pixel-text">
-                        <span className={asset.change.startsWith("+") ? "text-primary" : "text-red-500"}>
-                          {asset.change}
-                        </span>
+                  {walletLoading ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
                       </td>
                     </tr>
-                  ))}
+                  ) : assets.length > 0 ? (
+                    assets.map((asset) => (
+                      <tr key={asset.symbol} className="tertiary-border border-b glitch-hover">
+                        <td className="py-4 px-4">
+                          <div className="pixel-text">
+                            <p className="font-semibold text-foreground">{asset.name}</p>
+                            <p className="text-foreground/60 text-sm">{asset.symbol}</p>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-right pixel-text text-foreground">{asset.amount || '0.00'}</td>
+                        <td className="py-4 px-4 text-right font-semibold pixel-text text-foreground">{asset.value || '$0.00'}</td>
+                        <td className="py-4 px-4 text-right pixel-text">
+                          <span className={asset.change.startsWith("+") ? "text-primary" : asset.change === "0.0%" ? "text-foreground/60" : "text-red-500"}>
+                            {asset.change || '0.0%'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-foreground/60 pixel-text">
+                        No assets found
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -210,7 +249,8 @@ export default function Dashboard() {
               </a>
             </div>
             <div className="space-y-4">
-              {recentTransactions.map((tx) => (
+              {recentTransactions.length > 0 ? (
+                recentTransactions.map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between p-4 tertiary-border glitch-hover">
                   <div className="flex items-center gap-4">
                     <div className="p-3 border-2 border-primary">
@@ -229,7 +269,12 @@ export default function Dashboard() {
                     <p className="text-foreground/60 text-sm">{tx.date}</p>
                   </div>
                 </div>
-              ))}
+              ))
+              ) : (
+                <div className="text-center py-8 text-foreground/60 pixel-text">
+                  No recent transactions
+                </div>
+              )}
             </div>
           </div>
         </div>
