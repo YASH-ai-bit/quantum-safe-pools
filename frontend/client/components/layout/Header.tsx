@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Menu, X, Wallet } from "lucide-react";
 import { useState } from "react";
+import ConnectSnapButton from "../ConnectSnapButton";
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,9 +40,7 @@ export default function Header() {
 
           {/* CTA Button */}
           <div className="hidden md:flex items-center gap-4">
-            <button className="px-6 py-2 border-2 border-primary text-primary font-semibold hover:bg-primary hover:text-black transition-all duration-300 pixel-text text-sm">
-              [CONNECT_WALLET]
-            </button>
+            <ConnectSnapButton />
           </div>
 
           {/* Mobile Menu Button */}
@@ -80,9 +79,9 @@ export default function Header() {
             >
               $ create
             </Link>
-            <button className="w-full px-4 py-2 border-2 border-primary text-primary font-semibold hover:bg-primary hover:text-black transition-all pixel-text">
-              [CONNECT_WALLET]
-            </button>
+            <div className="px-2">
+              <ConnectSnapButton />
+            </div>
           </nav>
         )}
       </div>

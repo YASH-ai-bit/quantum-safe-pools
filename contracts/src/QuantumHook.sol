@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {BaseHook} from "@uniswap/v4-core/src/BaseHook.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import "./QuantumRegistry.sol";
 
 /**
@@ -15,11 +15,14 @@ import "./QuantumRegistry.sol";
  * @dev Uniswap V4 Hook implementing quantum-safe gating and dynamic fees
  * @notice The "Traffic Light" economic model - verified users pay 0.15%, bots pay 0.40%
  */
-contract QuantumHook is BaseHook {
+contract QuantumHook is IHooks {
     using PoolIdLibrary for PoolKey;
 
     // Quantum Registry for identity verification
     QuantumRegistry public immutable registry;
+    
+    // Pool Manager
+    IPoolManager public immutable poolManager;
 
     // Fee tiers (in hundredths of basis points)
     uint24 public constant QUANTUM_FEE = 1500; // 0.15% for verified users
@@ -38,15 +41,23 @@ contract QuantumHook is BaseHook {
     error OnlyQuantumUsersCanCreatePools();
     error OnlyQuantumUsersCanAddLiquidity();
     error OnlyQuantumUsersCanRemoveLiquidity();
+    error NotPoolManager();
 
-    constructor(IPoolManager _poolManager, QuantumRegistry _registry) BaseHook(_poolManager) {
+    // Modifier to ensure only pool manager can call
+    modifier onlyPoolManager() {
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
+        _;
+    }
+
+    constructor(IPoolManager _poolManager, QuantumRegistry _registry) {
+        poolManager = _poolManager;
         registry = _registry;
     }
 
     /**
-     * @dev Define which hooks this contract implements
+     * @dev Get hook permissions
      */
-    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
+    function getHookPermissions() external pure returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: true,
             afterInitialize: false,
@@ -81,7 +92,85 @@ contract QuantumHook is BaseHook {
 
         emit PoolCreatedByQuantumUser(key.toId(), sender);
         
-        return BaseHook.beforeInitialize.selector;
+        return IHooks.beforeInitialize.selector;
+    }
+
+    /**
+     * @dev Hook: After Initialize (not used)
+     */
+    function afterInitialize(
+        address,
+        PoolKey calldata,
+        uint160,
+        int24
+    ) external pure override returns (bytes4) {
+        return IHooks.afterInitialize.selector;
+    }
+
+    /**
+     * @dev Hook: Before Add Liquidity (Feature B - Liquidity Gating)
+     * @notice Only quantum-safe users can add liquidity
+     */
+    function beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata hookData
+    ) external override onlyPoolManager returns (bytes4) {
+        // Verify sender is quantum-safe
+        if (!registry.isQuantumSafe(sender)) {
+            revert OnlyQuantumUsersCanAddLiquidity();
+        }
+
+        emit LiquidityAddedByQuantumUser(sender, key.toId());
+        
+        return IHooks.beforeAddLiquidity.selector;
+    }
+
+    /**
+     * @dev Hook: After Add Liquidity (not used)
+     */
+    function afterAddLiquidity(
+        address,
+        PoolKey calldata,
+        IPoolManager.ModifyLiquidityParams calldata,
+        BalanceDelta,
+        BalanceDelta,
+        bytes calldata
+    ) external pure override returns (bytes4, BalanceDelta) {
+        return (IHooks.afterAddLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
+    }
+
+    /**
+     * @dev Hook: Before Remove Liquidity (Feature B - Secure Withdrawal)
+     * @notice Only quantum-safe users can remove liquidity
+     */
+    function beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata hookData
+    ) external override onlyPoolManager returns (bytes4) {
+        // Verify sender is quantum-safe
+        if (!registry.isQuantumSafe(sender)) {
+            revert OnlyQuantumUsersCanRemoveLiquidity();
+        }
+
+        return IHooks.beforeRemoveLiquidity.selector;
+    }
+
+    /**
+     * @dev Hook: After Remove Liquidity (not used)
+     */
+    function afterRemoveLiquidity(
+        address,
+        PoolKey calldata,
+        IPoolManager.ModifyLiquidityParams calldata,
+        BalanceDelta,
+        BalanceDelta,
+        bytes calldata
+    ) external pure override returns (bytes4, BalanceDelta) {
+        return (IHooks.afterRemoveLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
     }
 
     /**
@@ -109,50 +198,49 @@ contract QuantumHook is BaseHook {
 
         // Return: selector, no delta, dynamic fee
         return (
-            BaseHook.beforeSwap.selector,
+            IHooks.beforeSwap.selector,
             BeforeSwapDeltaLibrary.ZERO_DELTA,
             dynamicFee
         );
     }
 
     /**
-     * @dev Hook: Before Add Liquidity (Feature B - Liquidity Gating)
-     * @notice Only quantum-safe users can add liquidity
+     * @dev Hook: After Swap (not used)
      */
-    function beforeAddLiquidity(
-        address sender,
-        PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata params,
-        bytes calldata hookData
-    ) external override onlyPoolManager returns (bytes4) {
-        // Verify sender is quantum-safe
-        if (!registry.isQuantumSafe(sender)) {
-            revert OnlyQuantumUsersCanAddLiquidity();
-        }
-
-        emit LiquidityAddedByQuantumUser(sender, key.toId());
-        
-        return BaseHook.beforeAddLiquidity.selector;
+    function afterSwap(
+        address,
+        PoolKey calldata,
+        IPoolManager.SwapParams calldata,
+        BalanceDelta,
+        bytes calldata
+    ) external pure override returns (bytes4, int128) {
+        return (IHooks.afterSwap.selector, 0);
     }
 
     /**
-     * @dev Hook: Before Remove Liquidity (Feature B - Secure Withdrawal)
-     * @notice Only quantum-safe users can remove liquidity
-     * @notice Prevents LP drainage even if ETH key is compromised
+     * @dev Hook: Before Donate (not used)
      */
-    function beforeRemoveLiquidity(
-        address sender,
-        PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata params,
-        bytes calldata hookData
-    ) external override onlyPoolManager returns (bytes4) {
-        // Verify sender is quantum-safe
-        // In production, this would verify a Dilithium signature in hookData
-        if (!registry.isQuantumSafe(sender)) {
-            revert OnlyQuantumUsersCanRemoveLiquidity();
-        }
+    function beforeDonate(
+        address,
+        PoolKey calldata,
+        uint256,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return IHooks.beforeDonate.selector;
+    }
 
-        return BaseHook.beforeRemoveLiquidity.selector;
+    /**
+     * @dev Hook: After Donate (not used)
+     */
+    function afterDonate(
+        address,
+        PoolKey calldata,
+        uint256,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return IHooks.afterDonate.selector;
     }
 
     /**
@@ -175,11 +263,9 @@ contract QuantumHook is BaseHook {
         }
         return registry.isQuantumSafe(user);
     }
+}
 
-    /**
-     * @dev Admin function to toggle pool creation requirement
-     */
-    function setRequireQuantumForPoolCreation(bool required) external {
-        requireQuantumForPoolCreation = required;
-    }
+// Helper library for BalanceDelta
+library BalanceDeltaLibrary {
+    BalanceDelta internal constant ZERO_DELTA = BalanceDelta.wrap(0);
 }
