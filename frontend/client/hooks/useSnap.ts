@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { RPC_URLS, CHAIN_ID, CONTRACTS } from '@shared/contracts';
 
 const SNAP_ID = 'local:http://localhost:8080'; // Update with deployed snap ID
+const DISCONNECTED_KEY = 'quantum_snap_disconnected'; // localStorage key
 
 interface SnapState {
   isFlask: boolean;
@@ -116,13 +118,19 @@ export function useSnap() {
       });
 
       const isInstalled = !!snaps[SNAP_ID];
+      
+      // Check if user has explicitly disconnected
+      const isDisconnected = localStorage.getItem(DISCONNECTED_KEY) === 'true';
+      
       setSnapState((prev) => ({ 
         ...prev, 
         isInstalled,
-        isConnected: isInstalled 
+        // Only auto-connect if snap is installed AND user hasn't disconnected
+        isConnected: isInstalled && !isDisconnected
       }));
 
-      if (isInstalled) {
+      // Only load data if connected (not disconnected)
+      if (isInstalled && !isDisconnected) {
         await loadSnapData();
       }
     } catch (err) {
@@ -151,6 +159,9 @@ export function useSnap() {
 
       await initializeSnap();
       await loadSnapData();
+
+      // Clear disconnected flag when user explicitly connects
+      localStorage.removeItem(DISCONNECTED_KEY);
 
       setSnapState((prev) => ({ 
         ...prev, 
@@ -205,24 +216,42 @@ export function useSnap() {
         },
       });
 
-      const accountData = await provider.request({
-        method: 'wallet_invokeSnap',
-        params: {
-          snapId: SNAP_ID,
-          request: {
-            method: 'quantum_getAccountAddress',
+      // Get account address (optional - may fail if keys not initialized)
+      let accountAddress = null;
+      try {
+        const accountData = await provider.request({
+          method: 'wallet_invokeSnap',
+          params: {
+            snapId: SNAP_ID,
+            request: {
+              method: 'quantum_getAccountAddress',
             params: {
-              factoryAddress: '0x805cfcecaEbe8CA2B731bCeeD79e2A98142bD5D8',
+              factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
+              rpcUrl: RPC_URLS.SEPOLIA,
+            },
             },
           },
-        },
-      });
+        });
+        
+        // Validate address
+        const addr = accountData?.address || accountData?.accountAddress;
+        if (addr && addr !== '0x' && addr.length >= 42) {
+          accountAddress = addr;
+        }
+      } catch (err) {
+        console.warn('Could not get account address (keys may not be initialized):', err);
+        // This is OK - account address will be null until keys are generated
+      }
+
+      // Parse public key data
+      const publicKey = publicKeyData?.publicKey?.hex || publicKeyData?.publicKey;
+      const publicKeyHash = publicKeyData?.publicKey?.hash || publicKeyData?.publicKeyHash;
 
       setSnapState((prev) => ({
         ...prev,
-        publicKey: publicKeyData.publicKey,
-        publicKeyHash: publicKeyData.publicKeyHash,
-        accountAddress: accountData.accountAddress,
+        publicKey: publicKey || null,
+        publicKeyHash: publicKeyHash || null,
+        accountAddress: accountAddress,
       }));
     } catch (err) {
       console.error('Error loading snap data:', err);
@@ -287,6 +316,9 @@ export function useSnap() {
 
   // Disconnect snap (clear state)
   const disconnectSnap = useCallback(() => {
+    // Set disconnected flag to prevent auto-reconnection on page reload
+    localStorage.setItem(DISCONNECTED_KEY, 'true');
+    
     setSnapState({
       isFlask: snapState.isFlask,
       isInstalled: snapState.isInstalled,
