@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ethers } from 'ethers';
-import { CONTRACTS, RPC_URLS, CHAIN_ID } from '@shared/contracts';
-import { useSnap } from './useSnap';
+import { useReadContract, usePublicClient } from 'wagmi';
+import { CONTRACTS } from '@shared/contracts';
+import { formatUnits } from 'viem';
+import { sepolia } from 'wagmi/chains';
 
 // Uniswap V4 Types
 interface PoolKey {
@@ -24,42 +25,143 @@ interface Pool {
   volume24h: string;
   fees24h: string;
   apy: string;
+  token0Symbol: string;
+  token1Symbol: string;
 }
 
-// PoolManager ABI (simplified)
+// PoolManager ABI
 const POOL_MANAGER_ABI = [
-  'function getSlot0(bytes32 poolId) external view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee, uint24 hookFee)',
-  'function getLiquidity(bytes32 poolId) external view returns (uint128 liquidity)',
-  'function getFeeGrowthGlobal(bytes32 poolId) external view returns (uint256 feeGrowthGlobal0X128, uint256 feeGrowthGlobal1X128)',
-  'function initialize(PoolKey calldata key, uint160 sqrtPriceX96, bytes calldata hookData) external returns (int24 tick)',
-  'function modifyLiquidity(PoolKey calldata key, ModifyLiquidityParams calldata params, bytes calldata hookData) external returns (BalanceDelta delta, bytes32[] memory)',
-  'function swap(PoolKey calldata key, SwapParams calldata params, bytes calldata hookData) external returns (BalanceDelta delta, bytes32[] memory)',
-  'event PoolInitialized(bytes32 indexed poolId, address indexed currency0, address indexed currency1, uint24 fee, int24 tickSpacing, int24 tick)',
+  {
+    name: 'PoolInitialized',
+    type: 'event',
+    inputs: [
+      { name: 'poolId', type: 'bytes32', indexed: true },
+      { name: 'currency0', type: 'address', indexed: true },
+      { name: 'currency1', type: 'address', indexed: true },
+      { name: 'fee', type: 'uint24', indexed: false },
+      { name: 'tickSpacing', type: 'int24', indexed: false },
+      { name: 'tick', type: 'int24', indexed: false },
+    ],
+  },
+  {
+    name: 'getSlot0',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+    outputs: [
+      { name: 'sqrtPriceX96', type: 'uint160' },
+      { name: 'tick', type: 'int24' },
+      { name: 'protocolFee', type: 'uint24' },
+      { name: 'lpFee', type: 'uint24' },
+      { name: 'hookFee', type: 'uint24' },
+    ],
+  },
+  {
+    name: 'getLiquidity',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+    outputs: [{ name: 'liquidity', type: 'uint128' }],
+  },
+  {
+    name: 'getFeeGrowthGlobal',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+    outputs: [
+      { name: 'feeGrowthGlobal0X128', type: 'uint256' },
+      { name: 'feeGrowthGlobal1X128', type: 'uint256' },
+    ],
+  },
 ] as const;
 
-// Helper to get Flask provider
-function getFlaskProvider() {
-  const { ethereum } = window as any;
-  if (!ethereum) return null;
+// ERC20 ABI for token symbols
+const ERC20_ABI = [
+  {
+    name: 'symbol',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }],
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+] as const;
 
-  if (ethereum.providers?.length) {
-    const flaskProvider = ethereum.providers.find((p: any) => p.isMetaMask && p.isFlask);
-    if (flaskProvider) return flaskProvider;
-    return ethereum.providers.find((p: any) => p.isMetaMask);
-  }
-  return ethereum;
-}
+// QuantumHook ABI for registry functions
+const QUANTUM_HOOK_ABI = [
+  {
+    name: 'getRegisteredPools',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32[]' }],
+  },
+  {
+    name: 'getPoolKey',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'poolId', type: 'bytes32' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks', type: 'address' },
+        ],
+      },
+    ],
+  },
+] as const;
 
 export function usePools() {
   const [pools, setPools] = useState<Pool[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isConnected } = useSnap();
+  const publicClient = usePublicClient({ chainId: sepolia.id });
+  
+  // Fetch pool IDs from on-chain registry (instant, no log scanning!)
+  const { data: poolIds, isLoading: isLoadingPools } = useReadContract({
+    address: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
+    abi: QUANTUM_HOOK_ABI,
+    functionName: 'getRegisteredPools',
+    chainId: sepolia.id,
+  });
 
-  // Fetch all pools from events
+  // Fetch token symbol
+  const fetchTokenSymbol = useCallback(async (address: string): Promise<string> => {
+    if (!address || address === '0x0000000000000000000000000000000000000000') {
+      return 'ETH';
+    }
+    
+    if (!publicClient) return address.slice(0, 6);
+
+    try {
+      const symbol = await publicClient.readContract({
+        address: address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'symbol',
+      } as any) as string;
+      return symbol || address.slice(0, 6);
+    } catch {
+      return address.slice(0, 6);
+    }
+  }, [publicClient]);
+
+  // Fetch pool details for each pool ID from registry
   const fetchPools = useCallback(async () => {
-    if (!isConnected) {
+    if (!publicClient || !poolIds || poolIds.length === 0) {
       setPools([]);
+      setLoading(false);
       return;
     }
 
@@ -67,75 +169,84 @@ export function usePools() {
     setError(null);
 
     try {
-      const flaskProvider = getFlaskProvider();
-      if (!flaskProvider) {
-        throw new Error('MetaMask Flask not found');
-      }
-
-      const provider = new ethers.JsonRpcProvider(RPC_URLS.SEPOLIA);
-      const poolManager = new ethers.Contract(
-        CONTRACTS.POOL_MANAGER || '0x0000000000000000000000000000000000000000',
-        POOL_MANAGER_ABI,
-        provider
-      );
-
-      // Get PoolInitialized events
-      const filter = poolManager.filters.PoolInitialized();
-      const events = await provider.getLogs({
-        fromBlock: 0,
-        toBlock: 'latest',
-        address: CONTRACTS.POOL_MANAGER,
-        topics: filter.topics,
-      });
-
       const poolsData: Pool[] = [];
 
-      for (const event of events) {
+      // Process each pool ID from the on-chain registry
+      for (const poolId of poolIds) {
         try {
-          const parsed = poolManager.interface.parseLog(event);
-          if (parsed) {
-            const poolId = parsed.args.poolId;
-            const slot0 = await poolManager.getSlot0(poolId);
-            const liquidity = await poolManager.getLiquidity(poolId);
-            const feeGrowth = await poolManager.getFeeGrowthGlobal(poolId);
+          // Fetch pool key and state in parallel
+          const [poolKeyResult, slot0, liquidity, feeGrowth] = await Promise.all([
+            publicClient.readContract({
+              address: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
+              abi: QUANTUM_HOOK_ABI,
+              functionName: 'getPoolKey',
+              args: [poolId as `0x${string}`],
+            } as any).then(r => r as unknown) as Promise<[string, string, bigint, bigint, string]>,
+            publicClient.readContract({
+              address: CONTRACTS.POOL_MANAGER as `0x${string}`,
+              abi: POOL_MANAGER_ABI,
+              functionName: 'getSlot0',
+              args: [poolId as `0x${string}`],
+            } as any).then(r => r as unknown) as Promise<[bigint, number, number, number, number]>,
+            publicClient.readContract({
+              address: CONTRACTS.POOL_MANAGER as `0x${string}`,
+              abi: POOL_MANAGER_ABI,
+              functionName: 'getLiquidity',
+              args: [poolId as `0x${string}`],
+            } as any).then(r => r as unknown) as Promise<bigint>,
+            publicClient.readContract({
+              address: CONTRACTS.POOL_MANAGER as `0x${string}`,
+              abi: POOL_MANAGER_ABI,
+              functionName: 'getFeeGrowthGlobal',
+              args: [poolId as `0x${string}`],
+            } as any).then(r => r as unknown) as Promise<[bigint, bigint]>,
+          ]);
 
-            // Get swap events for volume calculation
-            const swapFilter = poolManager.filters.Swap();
-            const swapEvents = await provider.getLogs({
-              fromBlock: Math.max(0, Number(event.blockNumber) - 6500), // ~24 hours
-              toBlock: 'latest',
-              address: CONTRACTS.POOL_MANAGER || '0x0000000000000000000000000000000000000000',
-              topics: swapFilter.topics,
-            });
+          // Extract pool key from result tuple
+          const poolKey: PoolKey = {
+            currency0: poolKeyResult[0],
+            currency1: poolKeyResult[1],
+            fee: Number(poolKeyResult[2]),
+            tickSpacing: Number(poolKeyResult[3]),
+            hooks: poolKeyResult[4],
+          };
 
-            // Calculate metrics (simplified - would need price oracles for accurate TVL)
-            const tvl = '0.00'; // Would need token prices
-            const volume24h = swapEvents.length > 0 ? '100.00' : '0.00'; // Simplified
-            const fees24h = '0.00'; // Would need previous fee growth
-            const apy = '0.00'; // Would calculate from fees and TVL
+          // Fetch token symbols
+          const [token0Symbol, token1Symbol] = await Promise.all([
+            fetchTokenSymbol(poolKey.currency0),
+            fetchTokenSymbol(poolKey.currency1),
+          ]);
 
-            poolsData.push({
-              id: poolId,
-              poolKey: {
-                currency0: parsed.args.currency0,
-                currency1: parsed.args.currency1,
-                fee: Number(parsed.args.fee),
-                tickSpacing: Number(parsed.args.tickSpacing),
-                hooks: parsed.args.hooks || CONTRACTS.QUANTUM_HOOK || '0x0000000000000000000000000000000000000000',
-              },
-              sqrtPriceX96: slot0.sqrtPriceX96,
-              tick: Number(slot0.tick),
-              liquidity: liquidity,
-              feeGrowthGlobal0X128: feeGrowth.feeGrowthGlobal0X128,
-              feeGrowthGlobal1X128: feeGrowth.feeGrowthGlobal1X128,
-              tvl,
-              volume24h,
-              fees24h,
-              apy,
-            });
-          }
+          // Calculate metrics (simplified)
+          const tvl = liquidity > 0n ? formatUnits(liquidity, 18) : '0.00';
+          const volume24h = '0.00'; // Would calculate from swap events if needed
+          const fees24h = '0.00';
+          const apy = '0.00';
+
+          poolsData.push({
+            id: poolId as `0x${string}`,
+            poolKey: {
+              currency0: poolKey.currency0,
+              currency1: poolKey.currency1,
+              fee: poolKey.fee,
+              tickSpacing: poolKey.tickSpacing,
+              hooks: poolKey.hooks,
+            },
+            sqrtPriceX96: slot0[0],
+            tick: Number(slot0[1]),
+            liquidity: liquidity,
+            feeGrowthGlobal0X128: feeGrowth[0],
+            feeGrowthGlobal1X128: feeGrowth[1],
+            tvl,
+            volume24h,
+            fees24h,
+            apy,
+            token0Symbol,
+            token1Symbol,
+          });
         } catch (err) {
-          console.error('Error parsing pool event:', err);
+          console.error('Error fetching pool details:', err);
+          // Continue with other pools even if one fails
         }
       }
 
@@ -146,18 +257,21 @@ export function usePools() {
     } finally {
       setLoading(false);
     }
-  }, [isConnected]);
+  }, [publicClient, poolIds, fetchTokenSymbol]);
 
+  // Fetch pools when pool IDs are loaded
   useEffect(() => {
-    fetchPools();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchPools, 30000);
-    return () => clearInterval(interval);
-  }, [fetchPools]);
+    if (poolIds !== undefined) {
+      fetchPools();
+    }
+  }, [poolIds, fetchPools]);
+
+  // Combine loading states
+  const isLoading = isLoadingPools || loading;
 
   return {
     pools,
-    loading,
+    loading: isLoading,
     error,
     refetch: fetchPools,
   };

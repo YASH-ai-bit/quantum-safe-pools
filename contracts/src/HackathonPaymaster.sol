@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "@account-abstraction/contracts/core/BasePaymaster.sol";
-import "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
+import "@account-abstraction/core/BasePaymaster.sol";
+import "@account-abstraction/interfaces/PackedUserOperation.sol";
 
 /**
  * @title HackathonPaymaster

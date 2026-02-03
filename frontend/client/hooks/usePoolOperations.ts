@@ -1,28 +1,8 @@
 import { useState, useCallback } from 'react';
-import { ethers } from 'ethers';
-import { CONTRACTS, RPC_URLS } from '@shared/contracts';
-import { useSnap } from './useSnap';
-
-// Helper to get Flask provider
-function getFlaskProvider() {
-  const { ethereum } = window as any;
-  if (!ethereum) return null;
-
-  if (ethereum.providers?.length) {
-    const flaskProvider = ethereum.providers.find((p: any) => p.isMetaMask && p.isFlask);
-    if (flaskProvider) return flaskProvider;
-    return ethereum.providers.find((p: any) => p.isMetaMask);
-  }
-  return ethereum;
-}
-
-// PoolManager ABI for operations
-const POOL_MANAGER_ABI = [
-  'function initialize(PoolKey calldata key, uint160 sqrtPriceX96, bytes calldata hookData) external returns (int24 tick)',
-  'function modifyLiquidity(PoolKey calldata key, ModifyLiquidityParams calldata params, bytes calldata hookData) external returns (BalanceDelta delta, bytes32[] memory)',
-  'function swap(PoolKey calldata key, SwapParams calldata params, bytes calldata hookData) external returns (BalanceDelta delta, bytes32[] memory)',
-  'function lock(bytes calldata data) external',
-] as const;
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { CONTRACTS } from '@shared/contracts';
+import { encodeFunctionData } from 'viem';
+import { sepolia } from 'wagmi/chains';
 
 interface PoolKey {
   currency0: string;
@@ -45,10 +25,127 @@ interface SwapParams {
   sqrtPriceLimitX96: bigint;
 }
 
+// PoolManager ABI for operations
+const POOL_MANAGER_ABI = [
+  {
+    name: 'initialize',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'key',
+        type: 'tuple',
+        components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks', type: 'address' },
+        ],
+      },
+      { name: 'sqrtPriceX96', type: 'uint160' },
+      { name: 'hookData', type: 'bytes' },
+    ],
+    outputs: [{ name: 'tick', type: 'int24' }],
+  },
+  {
+    name: 'modifyLiquidity',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'key',
+        type: 'tuple',
+        components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks', type: 'address' },
+        ],
+      },
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'tickLower', type: 'int24' },
+          { name: 'tickUpper', type: 'int24' },
+          { name: 'liquidityDelta', type: 'int256' },
+          { name: 'salt', type: 'uint256' },
+        ],
+      },
+      { name: 'hookData', type: 'bytes' },
+    ],
+    outputs: [
+      {
+        name: 'delta',
+        type: 'tuple',
+        components: [
+          { name: 'amount0', type: 'int256' },
+          { name: 'amount1', type: 'int256' },
+        ],
+      },
+      { name: '', type: 'bytes32[]' },
+    ],
+  },
+  {
+    name: 'swap',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'key',
+        type: 'tuple',
+        components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks', type: 'address' },
+        ],
+      },
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'zeroForOne', type: 'bool' },
+          { name: 'amountSpecified', type: 'int256' },
+          { name: 'sqrtPriceLimitX96', type: 'uint160' },
+        ],
+      },
+      { name: 'hookData', type: 'bytes' },
+    ],
+    outputs: [
+      {
+        name: 'delta',
+        type: 'tuple',
+        components: [
+          { name: 'amount0', type: 'int256' },
+          { name: 'amount1', type: 'int256' },
+        ],
+      },
+      { name: '', type: 'bytes32[]' },
+    ],
+  },
+  {
+    name: 'lock',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'data', type: 'bytes' }],
+    outputs: [],
+  },
+] as const;
+
 export function usePoolOperations() {
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isConnected } = useSnap();
+  const { address, isConnected } = useAccount();
+  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+    chainId: sepolia.id,
+  });
+
+  const loading = isPending || isConfirming;
 
   const createPool = useCallback(async (
     currency0: string,
@@ -57,27 +154,13 @@ export function usePoolOperations() {
     tickSpacing: number,
     initialPrice: bigint
   ) => {
-    if (!isConnected) {
+    if (!isConnected || !address) {
       throw new Error('Please connect MetaMask Flask first');
     }
 
-    setLoading(true);
     setError(null);
 
     try {
-      const flaskProvider = getFlaskProvider();
-      if (!flaskProvider) {
-        throw new Error('MetaMask Flask not found');
-      }
-
-      const provider = new ethers.BrowserProvider(flaskProvider, 'any');
-      const signer = await provider.getSigner();
-      const poolManager = new ethers.Contract(
-        CONTRACTS.POOL_MANAGER || '0x0000000000000000000000000000000000000000',
-        POOL_MANAGER_ABI,
-        signer
-      );
-
       const poolKey: PoolKey = {
         currency0,
         currency1,
@@ -86,19 +169,31 @@ export function usePoolOperations() {
         hooks: CONTRACTS.QUANTUM_HOOK || '0x0000000000000000000000000000000000000000',
       };
 
-      // Encode the pool key and initialize
-      const tx = await poolManager.initialize(poolKey, initialPrice, '0x');
-      const receipt = await tx.wait();
+      writeContract({
+        address: CONTRACTS.POOL_MANAGER as `0x${string}`,
+        abi: POOL_MANAGER_ABI,
+        functionName: 'initialize',
+        args: [
+          {
+            currency0: poolKey.currency0 as `0x${string}`,
+            currency1: poolKey.currency1 as `0x${string}`,
+            fee: poolKey.fee,
+            tickSpacing: poolKey.tickSpacing,
+            hooks: poolKey.hooks as `0x${string}`,
+          },
+          initialPrice,
+          '0x' as `0x${string}`,
+        ],
+        chainId: sepolia.id,
+      } as any);
 
-      return receipt;
+      return { hash };
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to create pool';
       setError(errorMsg);
       throw new Error(errorMsg);
-    } finally {
-      setLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, address, writeContract, hash]);
 
   const addLiquidity = useCallback(async (
     poolKey: PoolKey,
@@ -106,27 +201,13 @@ export function usePoolOperations() {
     tickUpper: number,
     liquidityDelta: bigint
   ) => {
-    if (!isConnected) {
+    if (!isConnected || !address) {
       throw new Error('Please connect MetaMask Flask first');
     }
 
-    setLoading(true);
     setError(null);
 
     try {
-      const flaskProvider = getFlaskProvider();
-      if (!flaskProvider) {
-        throw new Error('MetaMask Flask not found');
-      }
-
-      const provider = new ethers.BrowserProvider(flaskProvider, 'any');
-      const signer = await provider.getSigner();
-      const poolManager = new ethers.Contract(
-        CONTRACTS.POOL_MANAGER || '0x0000000000000000000000000000000000000000',
-        POOL_MANAGER_ABI,
-        signer
-      );
-
       const params: ModifyLiquidityParams = {
         tickLower,
         tickUpper,
@@ -134,24 +215,36 @@ export function usePoolOperations() {
         salt: 0n,
       };
 
-      // Encode the operation in lock
-      const lockData = ethers.AbiCoder.defaultAbiCoder().encode(
-        ['tuple(address,address,uint24,int24,address)', 'tuple(int24,int24,int256,uint256)'],
-        [[poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks], [params.tickLower, params.tickUpper, params.liquidityDelta, params.salt]]
-      );
+      writeContract({
+        address: CONTRACTS.POOL_MANAGER as `0x${string}`,
+        abi: POOL_MANAGER_ABI,
+        functionName: 'modifyLiquidity',
+        args: [
+          {
+            currency0: poolKey.currency0 as `0x${string}`,
+            currency1: poolKey.currency1 as `0x${string}`,
+            fee: poolKey.fee,
+            tickSpacing: poolKey.tickSpacing,
+            hooks: poolKey.hooks as `0x${string}`,
+          },
+          {
+            tickLower: params.tickLower,
+            tickUpper: params.tickUpper,
+            liquidityDelta: params.liquidityDelta,
+            salt: params.salt,
+          },
+          '0x' as `0x${string}`,
+        ],
+        chainId: sepolia.id,
+      } as any);
 
-      const tx = await poolManager.lock(lockData);
-      const receipt = await tx.wait();
-
-      return receipt;
+      return { hash };
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to add liquidity';
       setError(errorMsg);
       throw new Error(errorMsg);
-    } finally {
-      setLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, address, writeContract, hash]);
 
   const removeLiquidity = useCallback(async (
     poolKey: PoolKey,
@@ -169,51 +262,48 @@ export function usePoolOperations() {
     amountSpecified: bigint,
     sqrtPriceLimitX96: bigint
   ) => {
-    if (!isConnected) {
+    if (!isConnected || !address) {
       throw new Error('Please connect MetaMask Flask first');
     }
 
-    setLoading(true);
     setError(null);
 
     try {
-      const flaskProvider = getFlaskProvider();
-      if (!flaskProvider) {
-        throw new Error('MetaMask Flask not found');
-      }
-
-      const provider = new ethers.BrowserProvider(flaskProvider, 'any');
-      const signer = await provider.getSigner();
-      const poolManager = new ethers.Contract(
-        CONTRACTS.POOL_MANAGER || '0x0000000000000000000000000000000000000000',
-        POOL_MANAGER_ABI,
-        signer
-      );
-
       const params: SwapParams = {
         zeroForOne,
         amountSpecified,
         sqrtPriceLimitX96,
       };
 
-      // Encode swap operation in lock
-      const lockData = ethers.AbiCoder.defaultAbiCoder().encode(
-        ['tuple(address,address,uint24,int24,address)', 'tuple(bool,int256,uint160)'],
-        [[poolKey.currency0, poolKey.currency1, poolKey.fee, poolKey.tickSpacing, poolKey.hooks], [params.zeroForOne, params.amountSpecified, params.sqrtPriceLimitX96]]
-      );
+      writeContract({
+        address: CONTRACTS.POOL_MANAGER as `0x${string}`,
+        abi: POOL_MANAGER_ABI,
+        functionName: 'swap',
+        args: [
+          {
+            currency0: poolKey.currency0 as `0x${string}`,
+            currency1: poolKey.currency1 as `0x${string}`,
+            fee: poolKey.fee,
+            tickSpacing: poolKey.tickSpacing,
+            hooks: poolKey.hooks as `0x${string}`,
+          },
+          {
+            zeroForOne: params.zeroForOne,
+            amountSpecified: params.amountSpecified,
+            sqrtPriceLimitX96: params.sqrtPriceLimitX96,
+          },
+          '0x' as `0x${string}`,
+        ],
+        chainId: sepolia.id,
+      } as any);
 
-      const tx = await poolManager.lock(lockData);
-      const receipt = await tx.wait();
-
-      return receipt;
+      return { hash };
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to swap';
       setError(errorMsg);
       throw new Error(errorMsg);
-    } finally {
-      setLoading(false);
     }
-  }, [isConnected]);
+  }, [isConnected, address, writeContract, hash]);
 
   return {
     createPool,
@@ -222,5 +312,7 @@ export function usePoolOperations() {
     swap,
     loading,
     error,
+    hash,
+    isSuccess,
   };
 }

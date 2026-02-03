@@ -9,10 +9,10 @@ import "../src/MockGroth16Verifier.sol";
 import "../src/HackathonPaymaster.sol";
 import "../src/QuantumHook.sol";
 import "../src/QuantumPoolRouter.sol";
-import "@account-abstraction/contracts/core/EntryPoint.sol";
-import {IEntryPoint} from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
-import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import "@account-abstraction/core/EntryPoint.sol";
+import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
+import {PoolManager} from "@uniswap/v4-core/PoolManager.sol";
+import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
 
 /**
  * @title Deploy

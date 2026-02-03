@@ -6,11 +6,32 @@ import { Shield, Key, CheckCircle, Loader2, AlertTriangle, X } from 'lucide-reac
 interface QuantumSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRegistrationComplete?: () => void;
 }
 
 type Step = 'generate' | 'register' | 'complete' | 'error';
 
-export default function QuantumSetupModal({ isOpen, onClose }: QuantumSetupModalProps) {
+export default function QuantumSetupModal({ isOpen, onClose, onRegistrationComplete }: QuantumSetupModalProps) {
+  // Disable body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Restore scroll position
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
   const { publicKey, publicKeyHash, refreshData } = useSnap();
   const { register, isLoading, error: registryError } = useQuantumRegistry();
   
@@ -53,6 +74,10 @@ export default function QuantumSetupModal({ isOpen, onClose }: QuantumSetupModal
       const hash = await register(publicKeyHash);
       setTxHash(hash);
       setStep('complete');
+      // Notify parent that registration is complete
+      if (onRegistrationComplete) {
+        onRegistrationComplete();
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to register');
       setStep('error');
@@ -64,15 +89,14 @@ export default function QuantumSetupModal({ isOpen, onClose }: QuantumSetupModal
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm">
       <div className="relative w-full max-w-2xl border-2 border-primary bg-black p-8 shadow-2xl shadow-primary/20">
-        {/* Close button */}
-        {step === 'complete' && (
-          <button
-            onClick={onClose}
-            className="absolute right-4 top-4 text-foreground/60 hover:text-primary transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        )}
+        {/* Close button - always visible */}
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-foreground/60 hover:text-primary transition-colors z-10"
+          aria-label="Close"
+        >
+          <X className="w-6 h-6" />
+        </button>
 
         {/* Header */}
         <div className="mb-8 border-b-2 border-primary pb-4">

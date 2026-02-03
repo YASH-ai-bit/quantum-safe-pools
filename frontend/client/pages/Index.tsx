@@ -18,8 +18,6 @@ export default function Index() {
 
   // Get primary token balances for display
   const ethBalance = tokenBalances.find(t => t.symbol === 'ETH');
-  const btcBalance = null; // Would need BTC token address
-  const lptBalance = null; // Would need LP token tracking
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -96,16 +94,24 @@ export default function Index() {
 
                   <div className="space-y-3 pixel-text text-sm">
                     <div className="flex justify-between items-center text-foreground/80">
-                      <span>{'> btc_qs:'}</span>
-                      <span className="text-primary">{btcBalance ? `${btcBalance.amount} BTC` : '0.00 BTC'}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-foreground/80">
-                      <span>{'> eth_qs:'}</span>
+                      <span>{'> eth_sep:'}</span>
                       <span className="text-primary">{ethBalance ? `${ethBalance.amount} ETH` : '0.00 ETH'}</span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
-                      <span>{'> lpt_tokens:'}</span>
-                      <span className="text-primary">{lptBalance ? `${lptBalance.amount} LPT` : '0.00 LPT'}</span>
+                      <span>{'> usdc:'}</span>
+                      <span className="text-primary">
+                        {tokenBalances.find(t => t.symbol === 'USDC') 
+                          ? `${tokenBalances.find(t => t.symbol === 'USDC')?.amount} USDC` 
+                          : '0.00 USDC'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-foreground/80">
+                      <span>{'> lp_tokens:'}</span>
+                      <span className="text-primary">
+                        {tokenBalances.filter(t => t.isLP).length > 0
+                          ? `${tokenBalances.filter(t => t.isLP).length} positions`
+                          : '0 positions'}
+                      </span>
                     </div>
                   </div>
 

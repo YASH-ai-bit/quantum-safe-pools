@@ -15,7 +15,7 @@ export default function Header() {
             <img 
               src="/logo.svg" 
               alt="Quantum Vault Logo" 
-              className="w-10 h-10 glitch-hover"
+              className="w-10 h-10"
             />
             <span className="text-xl font-bold pixel-text hidden sm:inline text-primary">
               QUANTUM_VAULT

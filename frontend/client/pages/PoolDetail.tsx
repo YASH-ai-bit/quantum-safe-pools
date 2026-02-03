@@ -5,13 +5,14 @@ import { ArrowRight, TrendingUp, TrendingDown, DollarSign, BarChart3, Loader2 } 
 import { useState, useEffect } from "react";
 import { usePools } from "@/hooks/usePools";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
+import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
-import { ethers } from "ethers";
 
 export default function PoolDetail() {
   const { poolId } = useParams<{ poolId: string }>();
-  const { pools, loading: poolsLoading } = usePools();
-  const { addLiquidity, removeLiquidity, swap, loading: opsLoading } = usePoolOperations();
+  const { pools, loading: poolsLoading, refetch: refetchPools } = usePools();
+  const { addLiquidity, removeLiquidity, swap, loading: opsLoading, isSuccess } = usePoolOperations();
+  const { refetch: refetchWallet } = useWalletData();
   const { isConnected } = useSnap();
   
   const [activeTab, setActiveTab] = useState<'overview' | 'add' | 'remove' | 'swap'>('overview');
@@ -22,6 +23,14 @@ export default function PoolDetail() {
   const [swapTokenIn, setSwapTokenIn] = useState<'token0' | 'token1'>('token0');
 
   const pool = pools.find(p => p.id === poolId);
+
+  // Refresh data after successful operations
+  useEffect(() => {
+    if (isSuccess) {
+      refetchPools();
+      refetchWallet();
+    }
+  }, [isSuccess, refetchPools, refetchWallet]);
 
   if (poolsLoading) {
     return (

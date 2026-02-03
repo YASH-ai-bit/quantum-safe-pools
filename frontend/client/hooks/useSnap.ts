@@ -18,31 +18,25 @@ function getFlaskProvider() {
   const { ethereum } = window as any;
   
   if (!ethereum) {
-    console.log('No ethereum provider found');
     return null;
   }
 
   // If multiple providers exist, find Flask specifically
   if (ethereum.providers?.length) {
-    console.log('Multiple providers detected:', ethereum.providers.length);
     const flaskProvider = ethereum.providers.find((provider: any) => {
-      console.log('Checking provider:', { isMetaMask: provider.isMetaMask, isFlask: provider.isFlask });
       return provider.isMetaMask && provider.isFlask;
     });
     
     if (flaskProvider) {
-      console.log('✅ Flask provider found in providers array');
       return flaskProvider;
     }
     
     // Fallback: if no Flask flag, try the first MetaMask that supports snaps
     const mmProvider = ethereum.providers.find((p: any) => p.isMetaMask);
-    console.log('Trying fallback MetaMask provider');
     return mmProvider || ethereum.providers[0];
   }
 
   // Single provider - could be Flask
-  console.log('Single provider detected:', { isMetaMask: ethereum.isMetaMask, isFlask: ethereum.isFlask });
   return ethereum;
 }
 
@@ -60,39 +54,48 @@ export function useSnap() {
 
   // Check if MetaMask Flask is installed
   useEffect(() => {
+    let mounted = true;
+    
     const checkFlask = async () => {
-      console.log('🔍 Checking for Flask...');
       const provider = getFlaskProvider();
       
       if (!provider) {
-        console.log('❌ No provider found');
-        setSnapState((prev) => ({ ...prev, isFlask: false }));
+        if (mounted) {
+          setSnapState((prev) => ({ ...prev, isFlask: false }));
+        }
         return;
       }
 
       try {
-        console.log('📡 Testing wallet_getSnaps method...');
         // Try to call wallet_getSnaps - this method only exists in Flask
         const snaps = await provider.request({
           method: 'wallet_getSnaps',
         });
 
         // If we get here, Flask is installed
-        console.log('✅ Flask detected! Snaps:', snaps);
-        setSnapState((prev) => ({ ...prev, isFlask: true }));
-        await checkSnapInstalled();
+        if (mounted) {
+          setSnapState((prev) => ({ ...prev, isFlask: true }));
+          await checkSnapInstalled();
+        }
       } catch (err: any) {
         // If this fails, Flask is not installed
-        console.log('❌ Flask not detected. Error:', err.message || err);
-        setSnapState((prev) => ({ ...prev, isFlask: false }));
+        if (mounted) {
+          setSnapState((prev) => ({ ...prev, isFlask: false }));
+        }
       }
     };
 
     checkFlask();
     
-    // Also listen for account changes to re-check
+    // Also listen for account changes to re-check (debounced)
+    let accountsChangedTimeout: NodeJS.Timeout;
     const handleAccountsChanged = () => {
-      checkFlask();
+      clearTimeout(accountsChangedTimeout);
+      accountsChangedTimeout = setTimeout(() => {
+        if (mounted) {
+          checkFlask();
+        }
+      }, 500);
     };
     
     const provider = getFlaskProvider();
@@ -101,6 +104,8 @@ export function useSnap() {
     }
     
     return () => {
+      mounted = false;
+      clearTimeout(accountsChangedTimeout);
       if (provider) {
         provider.removeListener('accountsChanged', handleAccountsChanged);
       }
@@ -133,9 +138,9 @@ export function useSnap() {
       if (isInstalled && !isDisconnected) {
         await loadSnapData();
       }
-    } catch (err) {
-      console.error('Error checking snap:', err);
-    }
+      } catch (err) {
+        // Silently handle errors
+      }
   };
 
   // Install and connect to snap
@@ -172,7 +177,6 @@ export function useSnap() {
       setLoading(false);
       return true;
     } catch (err: any) {
-      console.error('Error connecting snap:', err);
       setError(err?.message || 'Failed to connect snap');
       setLoading(false);
       return false;
@@ -195,7 +199,6 @@ export function useSnap() {
         },
       });
     } catch (err) {
-      console.error('Error initializing snap:', err);
       throw err;
     }
   };
@@ -239,7 +242,6 @@ export function useSnap() {
           accountAddress = addr;
         }
       } catch (err) {
-        console.warn('Could not get account address (keys may not be initialized):', err);
         // This is OK - account address will be null until keys are generated
       }
 
@@ -281,7 +283,6 @@ export function useSnap() {
 
       return signature;
     } catch (err) {
-      console.error('Error signing message:', err);
       throw err;
     }
   };
@@ -309,7 +310,6 @@ export function useSnap() {
 
       return txHash;
     } catch (err) {
-      console.error('Error sending transaction:', err);
       throw err;
     }
   };

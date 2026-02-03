@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
-import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
-import {PoolTestBase} from "@uniswap/v4-core/src/test/PoolTestBase.sol";
-import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
+import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/types/PoolKey.sol";
+import {BalanceDelta} from "@uniswap/v4-core/types/BalanceDelta.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/v4-core/types/Currency.sol";
+import {IUnlockCallback} from "@uniswap/v4-core/interfaces/callback/IUnlockCallback.sol";
+import {IERC20Minimal} from "@uniswap/v4-core/interfaces/external/IERC20Minimal.sol";
 
 /**
  * @title QuantumPoolRouter
  * @dev Router contract for interacting with Uniswap V4 pools via QuantumHook
  * @notice Handles swaps and liquidity operations with proper currency settlement
  */
-contract QuantumPoolRouter is PoolTestBase {
+contract QuantumPoolRouter is IUnlockCallback {
     using CurrencyLibrary for Currency;
-    using CurrencySettler for Currency;
+    
+    IPoolManager public immutable manager;
 
     error InvalidCaller();
 
@@ -37,7 +37,9 @@ contract QuantumPoolRouter is PoolTestBase {
         MODIFY_LIQUIDITY
     }
 
-    constructor(IPoolManager _manager) PoolTestBase(_manager) {}
+    constructor(IPoolManager _manager) {
+        manager = _manager;
+    }
 
     /**
      * @dev Execute a swap through the pool
@@ -100,12 +102,40 @@ contract QuantumPoolRouter is PoolTestBase {
             // Settle currencies
             if (swapData.params.zeroForOne) {
                 // Swapping token0 for token1
-                swapData.key.currency0.settle(manager, swapData.sender, uint256(int256(-delta.amount0())), false);
-                swapData.key.currency1.take(manager, swapData.sender, uint256(int256(delta.amount1())), false);
+                if (delta.amount0() < 0) {
+                    // Paying token0
+                    manager.sync(swapData.key.currency0);
+                    if (swapData.key.currency0.isAddressZero()) {
+                        manager.settle{value: uint256(int256(-delta.amount0()))}();
+                    } else {
+                        IERC20Minimal(Currency.unwrap(swapData.key.currency0)).transferFrom(
+                            swapData.sender, address(manager), uint256(int256(-delta.amount0()))
+                        );
+                        manager.settle();
+                    }
+                }
+                if (delta.amount1() > 0) {
+                    // Receiving token1
+                    manager.take(swapData.key.currency1, swapData.sender, uint256(int256(delta.amount1())));
+                }
             } else {
                 // Swapping token1 for token0
-                swapData.key.currency1.settle(manager, swapData.sender, uint256(int256(-delta.amount1())), false);
-                swapData.key.currency0.take(manager, swapData.sender, uint256(int256(delta.amount0())), false);
+                if (delta.amount1() < 0) {
+                    // Paying token1
+                    manager.sync(swapData.key.currency1);
+                    if (swapData.key.currency1.isAddressZero()) {
+                        manager.settle{value: uint256(int256(-delta.amount1()))}();
+                    } else {
+                        IERC20Minimal(Currency.unwrap(swapData.key.currency1)).transferFrom(
+                            swapData.sender, address(manager), uint256(int256(-delta.amount1()))
+                        );
+                        manager.settle();
+                    }
+                }
+                if (delta.amount0() > 0) {
+                    // Receiving token0
+                    manager.take(swapData.key.currency0, swapData.sender, uint256(int256(delta.amount0())));
+                }
             }
         } else {
             // Liquidity operation
@@ -116,18 +146,34 @@ contract QuantumPoolRouter is PoolTestBase {
             // Settle currencies based on delta
             if (delta.amount0() < 0) {
                 // Paying token0
-                liqData.key.currency0.settle(manager, liqData.sender, uint256(int256(-delta.amount0())), false);
+                manager.sync(liqData.key.currency0);
+                if (liqData.key.currency0.isAddressZero()) {
+                    manager.settle{value: uint256(int256(-delta.amount0()))}();
+                } else {
+                    IERC20Minimal(Currency.unwrap(liqData.key.currency0)).transferFrom(
+                        liqData.sender, address(manager), uint256(int256(-delta.amount0()))
+                    );
+                    manager.settle();
+                }
             } else if (delta.amount0() > 0) {
                 // Receiving token0
-                liqData.key.currency0.take(manager, liqData.sender, uint256(int256(delta.amount0())), false);
+                manager.take(liqData.key.currency0, liqData.sender, uint256(int256(delta.amount0())));
             }
 
             if (delta.amount1() < 0) {
                 // Paying token1
-                liqData.key.currency1.settle(manager, liqData.sender, uint256(int256(-delta.amount1())), false);
+                manager.sync(liqData.key.currency1);
+                if (liqData.key.currency1.isAddressZero()) {
+                    manager.settle{value: uint256(int256(-delta.amount1()))}();
+                } else {
+                    IERC20Minimal(Currency.unwrap(liqData.key.currency1)).transferFrom(
+                        liqData.sender, address(manager), uint256(int256(-delta.amount1()))
+                    );
+                    manager.settle();
+                }
             } else if (delta.amount1() > 0) {
                 // Receiving token1
-                liqData.key.currency1.take(manager, liqData.sender, uint256(int256(delta.amount1())), false);
+                manager.take(liqData.key.currency1, liqData.sender, uint256(int256(delta.amount1())));
             }
         }
 
