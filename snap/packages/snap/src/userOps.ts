@@ -4,16 +4,17 @@ import {
   Interface,
   Contract,
   parseUnits,
+  concat,
   type Provider,
 } from 'ethers';
 
 /**
  * Constants for ERC-4337
  */
-export const ENTRYPOINT_ADDRESS = '0x9f0E157b4f8c61079b7bbe6A9Fe434269265356B'; // v0.7 EntryPoint
-export const FACTORY_ADDRESS = '0x179F8615C5939F3E9581F9DB3412409Fc1AE2859'; // QuantumAccountFactory
-export const VERIFIER_ADDRESS = '0x801Ca67E4AAd52061A480e2a0014490Db60aE6aC'; // Groth16Verifier
-export const REGISTRY_ADDRESS = '0xde5620b1e0b1267D606fAb6fcF2B67f98A72112A'; // QuantumRegistry
+export const ENTRYPOINT_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // v0.7 EntryPoint
+export const FACTORY_ADDRESS = '0x40ea8361529b917929FC6dcEC696791FCb48A52c'; // QuantumAccountFactory
+export const VERIFIER_ADDRESS = '0xD2e72EBC10E14097f628e04e460ED232fA2887bc'; // Groth16Verifier
+export const REGISTRY_ADDRESS = '0x25e6D39FC1888BDD36a6004a88467E8BFb38D3B2'; // QuantumRegistry
 
 // Default ABI coder instance
 const abiCoder = AbiCoder.defaultAbiCoder();
@@ -66,7 +67,8 @@ export async function calculateAccountAddress(
   );
 
   try {
-    const address = await factory.getAddress(publicKeyHash, salt);
+    // Use getFunction().staticCall() to definitively avoid conflict with Ethers.js BaseContract.getAddress()
+    const address = await factory.getFunction('getAddress').staticCall(publicKeyHash, salt);
     console.log('[YELLOW-SDK] Account address calculated:', address);
 
     if (!address || address === '0x' || address === '0x0000000000000000000000000000000000000000') {
@@ -175,6 +177,93 @@ export async function isRegistered(
   }
 }
 
+// Helper for hex conversion
+export function toHex(value: bigint | number) {
+  if (value === undefined || value === null) return '0x0';
+  return "0x" + BigInt(value).toString(16);
+}
+
+/**
+ * JSON UserOperation v0.7 (Expanded for Bundler)
+ */
+export type UserOperationV07 = {
+  sender: string;
+  nonce: string; // hex
+  factory?: string;
+  factoryData?: string;
+  callData: string;
+  callGasLimit: string;
+  verificationGasLimit: string;
+  preVerificationGas: string;
+  maxFeePerGas: string;
+  maxPriorityFeePerGas: string;
+  paymaster?: string;
+  paymasterData?: string;
+  signature: string;
+};
+
+/**
+ * Convert PackedUserOperation to JSON UserOperation v0.7
+ */
+export function packedToJsonUserOp(
+  packed: PackedUserOperation,
+  factoryAddress?: string,
+): UserOperationV07 {
+  // unpack gas limits
+  const accountGasLimits = packed.accountGasLimits.startsWith('0x') ? packed.accountGasLimits.slice(2) : packed.accountGasLimits;
+  const verificationGasLimit = BigInt('0x' + accountGasLimits.slice(0, 32));
+  const callGasLimit = BigInt('0x' + accountGasLimits.slice(32));
+
+  // unpack gas fees
+  const gasFees = packed.gasFees.startsWith('0x') ? packed.gasFees.slice(2) : packed.gasFees;
+  const maxPriorityFeePerGas = BigInt('0x' + gasFees.slice(0, 32));
+  const maxFeePerGas = BigInt('0x' + gasFees.slice(32));
+
+  // Handle factory/factoryData from initCode
+  let factory = undefined;
+  let factoryData = undefined;
+
+  if (packed.initCode && packed.initCode !== '0x' && packed.initCode.length > 2) {
+    // In v0.7, initCode is factory + factoryData
+    // But for JSON RPC, we usually split them
+    // However, check if we need to explicitly pass them or if we can extract from initCode
+    // If we provided factoryAddress separately, use it. 
+    // Otherwise, assume initCode = factory (20 bytes) + data
+
+    // Standard v0.6/v0.7 initCode = 20-byte address + bytes
+    factory = '0x' + packed.initCode.slice(2, 42);
+    factoryData = '0x' + packed.initCode.slice(42);
+  }
+
+  // Handle paymaster
+  let paymaster = undefined;
+  let paymasterData = undefined;
+  if (packed.paymasterAndData && packed.paymasterAndData !== '0x' && packed.paymasterAndData.length > 2) {
+    paymaster = '0x' + packed.paymasterAndData.slice(2, 42);
+    paymasterData = '0x' + packed.paymasterAndData.slice(42);
+  }
+
+  return {
+    sender: packed.sender,
+    nonce: packed.nonce.startsWith('0x') ? packed.nonce : toHex(BigInt(packed.nonce)),
+
+    ...(factory ? { factory, factoryData } : {}),
+
+    callData: packed.callData,
+
+    callGasLimit: toHex(callGasLimit),
+    verificationGasLimit: toHex(verificationGasLimit),
+    preVerificationGas: packed.preVerificationGas.startsWith('0x') ? packed.preVerificationGas : toHex(BigInt(packed.preVerificationGas)),
+
+    maxFeePerGas: toHex(maxFeePerGas),
+    maxPriorityFeePerGas: toHex(maxPriorityFeePerGas),
+
+    ...(paymaster ? { paymaster, paymasterData } : {}),
+
+    signature: packed.signature,
+  };
+}
+
 /**
  * Construct a PackedUserOperation
  */
@@ -203,15 +292,38 @@ export async function constructUserOp(params: {
     paymasterAddress,
   } = params;
 
-  const isDeployed = await isAccountDeployed(accountAddress, provider);
-  const nonce = await getAccountNonce(accountAddress, provider);
+  // 1. Get Code to check deployment
+  const code = await provider.getCode(accountAddress);
+  const isDeployed = code !== '0x';
+  console.log('[YELLOW-SDK] Account deployment status:', { isDeployed, codeLength: code.length });
 
-  const initCode = isDeployed
-    ? '0x'
-    : encodeInitCode(publicKeyHash, salt, factoryAddress);
+  // 2. Get Nonce from EntryPoint
+  // 0x7ecebe00 = getNonce(address,uint192)
+  const nonceCallData = "0x7ecebe00" +
+    accountAddress.slice(2).padStart(64, "0") +
+    "0".padStart(64, "0"); // key = 0
 
+  let nonce = 0n;
+  try {
+    const nonceResult = await provider.call({
+      to: ENTRYPOINT_ADDRESS,
+      data: nonceCallData,
+    });
+    nonce = BigInt(nonceResult);
+    console.log('[YELLOW-SDK] Fetched nonce from EntryPoint:', nonce.toString());
+  } catch (err) {
+    console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0:', err);
+  }
+
+  // 3. Generate initCode (for PACKED structure)
+  let initCode = '0x';
+  if (!isDeployed) {
+    initCode = encodeInitCode(publicKeyHash, salt, factoryAddress);
+    console.log('[YELLOW-SDK] Generated initCode for deployment');
+  }
+
+  // 4. Construction CallData
   let callData = providedCallData;
-
   if (!callData) {
     const accountInterface = new Interface([
       'function execute(address dest, uint256 value, bytes calldata func)',
@@ -223,18 +335,18 @@ export async function constructUserOp(params: {
     ]);
   }
 
+  // 5. Gas Estimation
   const feeData = await provider.getFeeData();
-  const maxFeePerGas = feeData.maxFeePerGas || parseUnits('20', 'gwei');
-  const maxPriorityFeePerGas =
-    feeData.maxPriorityFeePerGas || parseUnits('2', 'gwei');
+  const maxFeePerGas = feeData.maxFeePerGas || parseUnits('50', 'gwei');
+  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || parseUnits('5', 'gwei');
 
   const paymasterAndData = paymasterAddress || '0x';
 
-  // Yellow Nitrolite optimized gas limits
+  // Explicit v0.7 gas limits
   const gasFees = packGasFees(maxPriorityFeePerGas, maxFeePerGas);
-  const verificationGasLimit = 300_000n;
-  const callGasLimit = 200_000n;
-  const preVerificationGas = 50_000n;
+  const verificationGasLimit = 1_000_000n;
+  const callGasLimit = 1_000_000n;
+  const preVerificationGas = 100_000n;
 
   const accountGasLimits = packAccountGasLimits(
     verificationGasLimit,
@@ -243,11 +355,11 @@ export async function constructUserOp(params: {
 
   return {
     sender: accountAddress,
-    nonce: nonce.toString(),
+    nonce: toHex(nonce), // Ensure hex for consistency
     initCode,
     callData,
     accountGasLimits,
-    preVerificationGas: preVerificationGas.toString(),
+    preVerificationGas: toHex(preVerificationGas),
     gasFees,
     paymasterAndData,
     signature: '0x',

@@ -27,6 +27,7 @@ import {
   encodeBatchExecution,
   ENTRYPOINT_ADDRESS,
   type PackedUserOperation,
+  packedToJsonUserOp,
 } from './userOps';
 
 // Helper for yellow terminal logs
@@ -570,11 +571,15 @@ async function handleSendTransaction(origin: string, params: any) {
     },
   });
 
+  // Convert to JSON-RPC format for bundler (expanding packed fields)
+  logYellow('Converting to JSON UserOp for bundler...');
+  const userOpJson = packedToJsonUserOp(userOp, factoryAddress);
+
   // Submit to bundler
   logYellow('Submitting UserOp to bundler...');
 
   try {
-    const bundlerUrl = 'https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5';
+    const bundlerUrl = 'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
 
     const bundlerResponse = await fetch(bundlerUrl, {
       method: 'POST',
@@ -585,7 +590,7 @@ async function handleSendTransaction(origin: string, params: any) {
         jsonrpc: '2.0',
         id: 1,
         method: 'eth_sendUserOperation',
-        params: [userOp, ENTRYPOINT_ADDRESS],
+        params: [userOpJson, ENTRYPOINT_ADDRESS],
       }),
     });
 

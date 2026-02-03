@@ -21,6 +21,14 @@ contract HackathonPaymaster is BasePaymaster {
     constructor(IEntryPoint _entryPoint, address _owner) BasePaymaster(_entryPoint, _owner) {}
 
     /**
+     * @dev Override validation to skip ERC165 check for canonical EntryPoint
+     */
+    function _validateEntryPointInterface(IEntryPoint) internal override view {
+        // Skip validation to allow deployment with canonical v0.7 EntryPoint
+        // which might not support the specific interface ID checked by BasePaymaster
+    }
+
+    /**
      * @dev Validate the paymaster user operation
      * @param userOp The user operation
      * @param maxCost Maximum cost that could be paid

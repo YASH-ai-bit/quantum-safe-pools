@@ -17,7 +17,7 @@ interface ModifyLiquidityParams {
   tickLower: number;
   tickUpper: number;
   liquidityDelta: bigint;
-  salt: bigint;
+  salt: `0x${string}`;
 }
 
 interface SwapParams {
@@ -26,8 +26,8 @@ interface SwapParams {
   sqrtPriceLimitX96: bigint;
 }
 
-// PoolManager ABI for operations
-const POOL_MANAGER_ABI = [
+// QuantumPoolRouter ABI for operations (calls PoolManager internally)
+const QUANTUM_POOL_ROUTER_ABI = [
   {
     name: 'initialize',
     type: 'function',
@@ -45,14 +45,13 @@ const POOL_MANAGER_ABI = [
         ],
       },
       { name: 'sqrtPriceX96', type: 'uint160' },
-      { name: 'hookData', type: 'bytes' },
     ],
     outputs: [{ name: 'tick', type: 'int24' }],
   },
   {
-    name: 'modifyLiquidity',
+    name: 'addLiquidity',
     type: 'function',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [
       {
         name: 'key',
@@ -72,27 +71,45 @@ const POOL_MANAGER_ABI = [
           { name: 'tickLower', type: 'int24' },
           { name: 'tickUpper', type: 'int24' },
           { name: 'liquidityDelta', type: 'int256' },
-          { name: 'salt', type: 'uint256' },
+          { name: 'salt', type: 'bytes32' },
         ],
       },
-      { name: 'hookData', type: 'bytes' },
     ],
-    outputs: [
+    outputs: [],
+  },
+  {
+    name: 'removeLiquidity',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
       {
-        name: 'delta',
+        name: 'key',
         type: 'tuple',
         components: [
-          { name: 'amount0', type: 'int256' },
-          { name: 'amount1', type: 'int256' },
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks', type: 'address' },
         ],
       },
-      { name: '', type: 'bytes32[]' },
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'tickLower', type: 'int24' },
+          { name: 'tickUpper', type: 'int24' },
+          { name: 'liquidityDelta', type: 'int256' },
+          { name: 'salt', type: 'bytes32' },
+        ],
+      },
     ],
+    outputs: [],
   },
   {
     name: 'swap',
     type: 'function',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [
       {
         name: 'key',
@@ -114,25 +131,7 @@ const POOL_MANAGER_ABI = [
           { name: 'sqrtPriceLimitX96', type: 'uint160' },
         ],
       },
-      { name: 'hookData', type: 'bytes' },
     ],
-    outputs: [
-      {
-        name: 'delta',
-        type: 'tuple',
-        components: [
-          { name: 'amount0', type: 'int256' },
-          { name: 'amount1', type: 'int256' },
-        ],
-      },
-      { name: '', type: 'bytes32[]' },
-    ],
-  },
-  {
-    name: 'lock',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'data', type: 'bytes' }],
     outputs: [],
   },
 ] as const;
@@ -146,7 +145,8 @@ export function usePoolOperations() {
     chainId: sepolia.id,
   });
 
-  const loading = isPending || isConfirming;
+  const [snapLoading, setSnapLoading] = useState(false);
+  const loading = isPending || isConfirming || snapLoading;
 
   // Hook for Snap
   const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction } = useSnap();
@@ -164,63 +164,77 @@ export function usePoolOperations() {
 
     setError(null);
 
-    const args = [
-      {
-        currency0: currency0 as `0x${string}`,
-        currency1: currency1 as `0x${string}`,
-        fee: fee,
-        tickSpacing: tickSpacing,
-        hooks: CONTRACTS.QUANTUM_HOOK || '0x0000000000000000000000000000000000000000',
-      },
-      initialPrice,
-      '0x' as `0x${string}`,
-    ];
+    // Uniswap V4 requires currency0 < currency1 (sorted by address)
+    const [orderedCurrency0, orderedCurrency1] =
+      currency0.toLowerCase() < currency1.toLowerCase()
+        ? [currency0, currency1]
+        : [currency1, currency0];
+
+    // Use dynamic fee flag for hook-enabled pools (bit 23 set = 0x800000)
+    const dynamicFee = 0x800000;
+
+    const poolKey = {
+      currency0: orderedCurrency0 as `0x${string}`,
+      currency1: orderedCurrency1 as `0x${string}`,
+      fee: dynamicFee,
+      tickSpacing: tickSpacing,
+      hooks: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
+    };
+
+    const args = [poolKey, initialPrice];
 
     try {
       if (isSnapConnected) {
-        // Use Snap (Yellow Nitrolite optimized)
-        const data = encodeFunctionData({
-          abi: POOL_MANAGER_ABI,
-          functionName: 'initialize',
-          args: args as any
-        });
+        setSnapLoading(true);
+        try {
+          // Use Snap (Yellow Nitrolite optimized)
+          const data = encodeFunctionData({
+            abi: QUANTUM_POOL_ROUTER_ABI,
+            functionName: 'initialize',
+            args: args as any
+          });
 
-        console.log('%c[POOL] Creating pool with quantum-safe transaction...', 'color: #00ffff; font-weight: bold;');
+          console.log('%c[POOL] Creating pool with quantum-safe transaction...', 'color: #00ffff; font-weight: bold;');
+          console.log('%c[POOL] Pool Key:', 'color: #00ffff;', poolKey);
+          console.log('%c[POOL] Initial Price (sqrtPriceX96):', 'color: #00ffff;', initialPrice.toString());
 
-        const result = await sendSnapTransaction(
-          CONTRACTS.POOL_MANAGER,
-          '0', // value
-          data
-        );
+          const result = await sendSnapTransaction(
+            CONTRACTS.QUANTUM_POOL_ROUTER,
+            '0', // value
+            data
+          );
 
-        // Check if snap returned an error
-        if (result.error) {
-          console.error('%c[POOL] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
-          if (result.logs && Array.isArray(result.logs)) {
-            console.log('%c[POOL] Snap logs:', 'color: #ffff00;', result.logs);
+          // Check if snap returned an error
+          if (result.error) {
+            console.error('%c[POOL] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+            if (result.logs && Array.isArray(result.logs)) {
+              console.log('%c[POOL] Snap logs:', 'color: #ffff00;', result.logs);
+            }
+            throw new Error(`Pool creation failed: ${result.error}`);
           }
-          throw new Error(`Pool creation failed: ${result.error}`);
+
+          if (!result.transactionHash) {
+            console.error('%c[POOL] ⚠️ No transaction hash:', 'color: #ff9900;', result);
+            throw new Error('Pool creation failed - no transaction hash received');
+          }
+
+          console.log('%c[POOL] ✅ Pool created successfully!', 'color: #00ff00; font-weight: bold;');
+          console.log('%c[POOL] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+
+          // Return the transaction hash from the bundler receipt
+          return {
+            hash: result.transactionHash as `0x${string}`,
+            userOpHash: result.userOpHash,
+          };
+        } finally {
+          setSnapLoading(false);
         }
-
-        if (!result.transactionHash) {
-          console.error('%c[POOL] ⚠️ No transaction hash:', 'color: #ff9900;', result);
-          throw new Error('Pool creation failed - no transaction hash received');
-        }
-
-        console.log('%c[POOL] ✅ Pool created successfully!', 'color: #00ff00; font-weight: bold;');
-        console.log('%c[POOL] Transaction hash:', 'color: #00ff00;', result.transactionHash);
-
-        // Return the transaction hash from the bundler receipt
-        return {
-          hash: result.transactionHash as `0x${string}`,
-          userOpHash: result.userOpHash,
-        };
       }
 
       // Fallback to standard wagmi (likely to fail if Quantum Hook enforces it)
       writeContract({
-        address: CONTRACTS.POOL_MANAGER as `0x${string}`,
-        abi: POOL_MANAGER_ABI,
+        address: CONTRACTS.QUANTUM_POOL_ROUTER as `0x${string}`,
+        abi: QUANTUM_POOL_ROUTER_ABI,
         functionName: 'initialize',
         args: args as any,
         chainId: sepolia.id,
@@ -256,9 +270,9 @@ export function usePoolOperations() {
       };
 
       writeContract({
-        address: CONTRACTS.POOL_MANAGER as `0x${string}`,
-        abi: POOL_MANAGER_ABI,
-        functionName: 'modifyLiquidity',
+        address: CONTRACTS.QUANTUM_POOL_ROUTER as `0x${string}`,
+        abi: QUANTUM_POOL_ROUTER_ABI,
+        functionName: 'addLiquidity',
         args: [
           {
             currency0: poolKey.currency0 as `0x${string}`,
@@ -271,9 +285,8 @@ export function usePoolOperations() {
             tickLower: params.tickLower,
             tickUpper: params.tickUpper,
             liquidityDelta: params.liquidityDelta,
-            salt: params.salt,
+            salt: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
           },
-          '0x' as `0x${string}`,
         ],
         chainId: sepolia.id,
       } as any);
@@ -316,8 +329,8 @@ export function usePoolOperations() {
       };
 
       writeContract({
-        address: CONTRACTS.POOL_MANAGER as `0x${string}`,
-        abi: POOL_MANAGER_ABI,
+        address: CONTRACTS.QUANTUM_POOL_ROUTER as `0x${string}`,
+        abi: QUANTUM_POOL_ROUTER_ABI,
         functionName: 'swap',
         args: [
           {
@@ -332,7 +345,6 @@ export function usePoolOperations() {
             amountSpecified: params.amountSpecified,
             sqrtPriceLimitX96: params.sqrtPriceLimitX96,
           },
-          '0x' as `0x${string}`,
         ],
         chainId: sepolia.id,
       } as any);

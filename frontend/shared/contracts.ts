@@ -9,7 +9,7 @@ export const CONTRACTS = {
   GROTH16_VERIFIER: '0x801Ca67E4AAd52061A480e2a0014490Db60aE6aC',
   QUANTUM_ACCOUNT_FACTORY: '0x179F8615C5939F3E9581F9DB3412409Fc1AE2859',
   HACKATHON_PAYMASTER: '0x0a499B7cEd22CeBe5aDAaed4f6bFb645bADE9B0A',
-  ENTRYPOINT: '0x9f0E157b4f8c61079b7bbe6A9Fe434269265356B',
+  ENTRYPOINT: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
   POOL_MANAGER: '0x1632806C6B321dD814D204b760158B664d49361b',
   QUANTUM_HOOK: '0x289411c48c131E847DE896E2bb6656B6f3F3B8eD',
   QUANTUM_POOL_ROUTER: '0x9669fd2b8e1e48Ae65C5A69Db4ad293Ee00D1072',
@@ -32,8 +32,8 @@ export const RPC_URLS = {
 } as const;
 
 export const BUNDLER_URLS = {
-  // Using Alchemy's bundler for Sepolia (same API key as RPC)
-  SEPOLIA: 'https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5',
+  // Using Pimlico bundler for Sepolia
+  SEPOLIA: 'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7',
   LOCAL: 'http://127.0.0.1:4337',
 } as const;
 

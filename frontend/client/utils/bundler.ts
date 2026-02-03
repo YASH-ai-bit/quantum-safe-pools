@@ -4,108 +4,81 @@ import { BUNDLER_URLS, CONTRACTS } from '@shared/contracts';
  * Convert a value to proper hex string format for bundler
  * Bundlers require all numeric fields to be hex strings with 0x prefix
  */
-function toHex(value: string | number | bigint): string {
-    if (typeof value === 'string') {
-        // Already has 0x prefix
-        if (value.startsWith('0x')) {
-            return value;
-        }
-        // Numeric string without 0x
-        const num = BigInt(value);
-        return '0x' + num.toString(16);
-    }
-    if (typeof value === 'bigint') {
-        return '0x' + value.toString(16);
-    }
-    if (typeof value === 'number') {
-        return '0x' + value.toString(16);
-    }
-    return '0x0';
+// Helper for hex conversion
+function toHex(value: bigint | number | string): string {
+    if (value === undefined || value === null) return '0x0';
+    if (typeof value === 'string' && value.startsWith('0x')) return value;
+    return "0x" + BigInt(value).toString(16);
 }
 
-/**
- * Unpack a v0.7 PackedUserOperation to v0.6 format for bundlers
- * v0.7 uses packed fields (accountGasLimits, gasFees)
- * v0.6 uses individual fields (callGasLimit, verificationGasLimit, maxFeePerGas, maxPriorityFeePerGas)
- * 
- * IMPORTANT: All numeric fields must be hex strings with 0x prefix!
- */
-function unpackUserOp(packedUserOp: any): any {
-    // Parse accountGasLimits (bytes32): verificationGasLimit (16 bytes) + callGasLimit (16 bytes)
-    let verificationGasLimit = '0x0';
-    let callGasLimit = '0x0';
-
-    if (packedUserOp.accountGasLimits && packedUserOp.accountGasLimits.length === 66) {
-        // Remove 0x prefix, split into two 32-char (16 byte) portions
-        const gasLimitsHex = packedUserOp.accountGasLimits.slice(2);
-        const verificationHex = gasLimitsHex.slice(0, 32).replace(/^0+/, '');
-        const callHex = gasLimitsHex.slice(32, 64).replace(/^0+/, '');
-        verificationGasLimit = '0x' + (verificationHex || '0');
-        callGasLimit = '0x' + (callHex || '0');
-    }
-
-    // Parse gasFees (bytes32): maxPriorityFeePerGas (16 bytes) + maxFeePerGas (16 bytes)
-    let maxPriorityFeePerGas = '0x0';
-    let maxFeePerGas = '0x0';
-
-    if (packedUserOp.gasFees && packedUserOp.gasFees.length === 66) {
-        const gasFeesHex = packedUserOp.gasFees.slice(2);
-        const priorityHex = gasFeesHex.slice(0, 32).replace(/^0+/, '');
-        const maxHex = gasFeesHex.slice(32, 64).replace(/^0+/, '');
-        maxPriorityFeePerGas = '0x' + (priorityHex || '0');
-        maxFeePerGas = '0x' + (maxHex || '0');
-    }
-
-    // Convert nonce to hex (this was the bug - '0' instead of '0x0')
-    const nonce = toHex(packedUserOp.nonce || 0);
-
-    // Convert preVerificationGas to hex
-    const preVerificationGas = toHex(packedUserOp.preVerificationGas || 0);
-
-    // Convert to v0.6 unpacked format with proper hex formatting
-    const unpackedUserOp = {
-        sender: packedUserOp.sender,
-        nonce,
-        initCode: packedUserOp.initCode || '0x',
-        callData: packedUserOp.callData,
-        callGasLimit,
-        verificationGasLimit,
-        preVerificationGas,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        paymasterAndData: packedUserOp.paymasterAndData || '0x',
-        signature: packedUserOp.signature || '0x',
-    };
-
-    console.log('%c[BUNDLER] Formatted UserOp fields:', 'color: #00ffff;', {
-        nonce: unpackedUserOp.nonce,
-        callGasLimit: unpackedUserOp.callGasLimit,
-        verificationGasLimit: unpackedUserOp.verificationGasLimit,
-        preVerificationGas: unpackedUserOp.preVerificationGas,
-        maxFeePerGas: unpackedUserOp.maxFeePerGas,
-        maxPriorityFeePerGas: unpackedUserOp.maxPriorityFeePerGas,
-    });
-
-    return unpackedUserOp;
-}
-
-/**
- * Submit a UserOperation to the bundler
- * @param userOp The packed user operation from the snap
- * @param chainId The chain ID (11155111 for Sepolia)
- * @returns The userOpHash from the bundler
- */
 export async function submitUserOpToBundler(userOp: any, chainId: number): Promise<string> {
     const bundlerUrl = chainId === 11155111 ? BUNDLER_URLS.SEPOLIA : BUNDLER_URLS.LOCAL;
 
     console.log('%c[BUNDLER] Submitting UserOp to bundler...', 'color: #00ffff; font-weight: bold;');
     console.log('%c[BUNDLER] Bundler URL:', 'color: #00ffff;', bundlerUrl);
-    console.log('%c[BUNDLER] EntryPoint:', 'color: #00ffff;', CONTRACTS.ENTRYPOINT);
 
-    // Convert packed v0.7 format to unpacked v0.6 format with proper hex formatting
-    const unpackedUserOp = unpackUserOp(userOp);
+    // Convert PackedUserOperation (Solidity/Snap format) to JSON UserOperation v0.7 (Bundler format)
+    let jsonUserOp = userOp;
 
-    console.log('%c[BUNDLER] Unpacked UserOp:', 'color: #00ffff;', unpackedUserOp);
+    // Check if it looks like a PackedUserOperation
+    if (userOp.accountGasLimits && userOp.gasFees) {
+        console.log('%c[BUNDLER] Detected PackedUserOperation, converting to JSON v0.7...', 'color: #ffff00;');
+
+        // unpacking gas limits
+        const accountGasLimits = userOp.accountGasLimits.startsWith('0x') ? userOp.accountGasLimits.slice(2) : userOp.accountGasLimits;
+        const verificationGasLimit = BigInt('0x' + accountGasLimits.slice(0, 32));
+        const callGasLimit = BigInt('0x' + accountGasLimits.slice(32));
+
+        // unpacking gas fees
+        const gasFees = userOp.gasFees.startsWith('0x') ? userOp.gasFees.slice(2) : userOp.gasFees;
+        const maxPriorityFeePerGas = BigInt('0x' + gasFees.slice(0, 32));
+        const maxFeePerGas = BigInt('0x' + gasFees.slice(32));
+
+        // Handle factory/factoryData
+        let factory = undefined;
+        let factoryData = undefined;
+        if (userOp.initCode && userOp.initCode !== '0x' && userOp.initCode.length > 2) {
+            factory = '0x' + userOp.initCode.slice(2, 42);
+            factoryData = '0x' + userOp.initCode.slice(42);
+        }
+
+        // Handle paymaster
+        let paymaster = undefined;
+        let paymasterData = undefined;
+        if (userOp.paymasterAndData && userOp.paymasterAndData !== '0x' && userOp.paymasterAndData.length > 2) {
+            paymaster = '0x' + userOp.paymasterAndData.slice(2, 42);
+            paymasterData = '0x' + userOp.paymasterAndData.slice(42);
+        }
+
+        jsonUserOp = {
+            sender: userOp.sender,
+            nonce: toHex(userOp.nonce),
+
+            ...(factory ? { factory, factoryData } : {}),
+
+            callData: userOp.callData,
+
+            callGasLimit: toHex(callGasLimit),
+            verificationGasLimit: toHex(verificationGasLimit),
+            preVerificationGas: toHex(userOp.preVerificationGas),
+
+            maxFeePerGas: toHex(maxFeePerGas),
+            maxPriorityFeePerGas: toHex(maxPriorityFeePerGas),
+
+            ...(paymaster ? { paymaster, paymasterData } : {}),
+
+            signature: userOp.signature,
+        };
+    }
+
+    console.log('%c[BUNDLER] UserOp to send:', 'color: #00ffff;', jsonUserOp);
+
+    const body = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_sendUserOperation',
+        params: [jsonUserOp, '0x0000000071727De22E5E9d8BAf0edAc6f37da032'],
+    };
 
     try {
         const response = await fetch(bundlerUrl, {
@@ -113,22 +86,8 @@ export async function submitUserOpToBundler(userOp: any, chainId: number): Promi
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'eth_sendUserOperation',
-                params: [
-                    unpackedUserOp,
-                    CONTRACTS.ENTRYPOINT,
-                ],
-            }),
+            body: JSON.stringify(body),
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('%c[BUNDLER] HTTP Error response:', 'color: #ff0000;', errorText);
-            throw new Error(`Bundler HTTP error: ${response.status} ${response.statusText} - ${errorText}`);
-        }
 
         const result = await response.json();
 
