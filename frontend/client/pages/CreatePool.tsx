@@ -23,6 +23,8 @@ const TOKEN_ADDRESSES: Record<string, string> = {
   USDC: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Sepolia USDC
   USDT: "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06", // Sepolia USDT (Aave testnet)
   DAI: "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357", // Sepolia DAI (Aave testnet)
+  PYUSD: "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9", // Sepolia PYUSD
+  LINK: "0x779877A7B0D9E8603169DdbD7836e478b4624789", // Sepolia LINK
 };
 
 export default function CreatePool() {
@@ -36,7 +38,7 @@ export default function CreatePool() {
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const navigate = useNavigate();
-  const { createPool, loading } = usePoolOperations();
+  const { createPool, approveToken, addLiquidity, loading } = usePoolOperations();
   const { refetch: refetchWallet } = useWalletData();
   const { refetch: refetchPools } = usePools();
   const { isConnected } = useSnap();
@@ -47,6 +49,8 @@ export default function CreatePool() {
     { symbol: "USDC", name: "USD Coin", address: TOKEN_ADDRESSES.USDC },
     { symbol: "USDT", name: "Tether", address: TOKEN_ADDRESSES.USDT },
     { symbol: "DAI", name: "Dai Stablecoin", address: TOKEN_ADDRESSES.DAI },
+    { symbol: "PYUSD", name: "PayPal USD", address: TOKEN_ADDRESSES.PYUSD },
+    { symbol: "LINK", name: "Chainlink", address: TOKEN_ADDRESSES.LINK },
   ];
 
   const fees = [
@@ -121,32 +125,98 @@ export default function CreatePool() {
       const feeBps = Math.round(parseFloat(fee) * 100);
       const tickSpacing = 60; // Standard tick spacing
 
-      console.log("%c[CREATE_POOL] Fee (bps):", "color: #00ffff;", feeBps);
+      console.log(
+        "%c[CREATE_POOL] Fee (bps):",
+        "color: #00ffff;",
+        feeBps
+      );
       console.log(
         "%c[CREATE_POOL] Tick spacing:",
         "color: #00ffff;",
-        tickSpacing,
+        tickSpacing
       );
 
+      // 1. Create Pool (Initialize)
       const result = await createPool(
         tokenAObj.address,
         tokenBObj.address,
         feeBps,
         tickSpacing,
-        initialPrice,
+        initialPrice
       );
 
-      // Set success state with transaction hash
       if (result?.hash) {
-        setTxHash(result.hash);
-        setIsSuccess(true);
-        // Refresh data
-        refetchPools();
-        refetchWallet();
-        // Navigate to pools page after a delay
-        setTimeout(() => {
-          navigate("/pools");
-        }, 3000);
+        console.log("%c[CREATE_POOL] Pool initialized! Hash:", "color: #00ff00;", result.hash);
+
+        // Wait for RPC synchronization (Nonce increment propagation)
+        console.log("Waiting for RPC sync...");
+        await new Promise(r => setTimeout(r, 5000));
+
+        // 2. Prepare for Adding Liquidity
+        const parsedAmountA = parseUnits(amountA, 18); // Assuming 18 decimals for now
+        const parsedAmountB = parseUnits(amountB, 18);
+
+        // Determine if tokens are ETH
+        const isTokenA_ETH = tokenAObj.symbol === "ETH";
+        const isTokenB_ETH = tokenBObj.symbol === "ETH";
+
+        // 3. Approve Tokens (if not ETH)
+        // We approve the Router (CONTRACTS.QUANTUM_POOL_ROUTER)
+        const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter per logs
+
+        if (!isTokenA_ETH) {
+          await approveToken(tokenAObj.address, ROUTER_ADDRESS, parsedAmountA);
+          console.log("Waiting for RPC sync...");
+          await new Promise(r => setTimeout(r, 5000));
+        }
+        if (!isTokenB_ETH) {
+          await approveToken(tokenBObj.address, ROUTER_ADDRESS, parsedAmountB);
+          console.log("Waiting for RPC sync...");
+          await new Promise(r => setTimeout(r, 5000));
+        }
+
+        // 4. Add Liquidity
+        // Full range tick for tickSpacing 60: -887220 to 887220 (rounded to multiple of 60)
+        // -887220 is divisible by 60 (-14787 * 60)
+        const tickLower = -887220;
+        const tickUpper = 887220;
+
+        // Approximating liquidityDelta for demo:
+        // In full range 1:1, L ~= amount.
+        // We take the amount of token A as the liquidity delta for simplicity in this demo.
+        const liquidityDelta = parsedAmountA;
+
+        // Calculate ETH value to send
+        let ethValue = "0";
+        if (isTokenA_ETH) ethValue = parsedAmountA.toString();
+        if (isTokenB_ETH) ethValue = parsedAmountB.toString();
+
+        const liquidityResult = await addLiquidity(
+          {
+            currency0: tokenAObj.address,
+            currency1: tokenBObj.address,
+            fee: feeBps,
+            tickSpacing: tickSpacing,
+            hooks: "0x201703B5f4e0cCfDa863bB81937703cEd2381E9e" // Hardcoded hook per logs/contracts
+          },
+          tickLower,
+          tickUpper,
+          liquidityDelta,
+          ethValue
+        );
+
+        // Set success state with FINAL transaction hash (liquidity addition)
+        if (liquidityResult?.hash) {
+          setTxHash(liquidityResult.hash);
+          setIsSuccess(true);
+          // Refresh data
+          refetchPools();
+          refetchWallet();
+          // Navigate to pools page after a delay
+          setTimeout(() => {
+            navigate("/pools");
+          }, 3000);
+        }
       }
     } catch (err: any) {
       setError(err.message || "Failed to create pool");
@@ -182,19 +252,17 @@ export default function CreatePool() {
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${
-                    s <= step
-                      ? "bg-primary text-black border-primary"
-                      : "bg-black border-primary/30 text-foreground/60"
-                  }`}
+                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${s <= step
+                    ? "bg-primary text-black border-primary"
+                    : "bg-black border-primary/30 text-foreground/60"
+                    }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`h-1 w-12 transition-all ${
-                      s < step ? "bg-primary" : "bg-primary/30"
-                    }`}
+                    className={`h-1 w-12 transition-all ${s < step ? "bg-primary" : "bg-primary/30"
+                      }`}
                   />
                 )}
               </div>

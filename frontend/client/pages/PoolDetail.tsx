@@ -23,72 +23,13 @@ export default function PoolDetail() {
     addLiquidity,
     removeLiquidity,
     swap,
+    approveToken, // Added approveToken
     loading: opsLoading,
   } = usePoolOperations();
   const { refetch: refetchWallet } = useWalletData();
   const { isConnected } = useSnap();
 
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "add" | "remove" | "swap"
-  >("overview");
-  const [addAmount0, setAddAmount0] = useState("");
-  const [addAmount1, setAddAmount1] = useState("");
-  const [removeAmount, setRemoveAmount] = useState("");
-  const [swapAmountIn, setSwapAmountIn] = useState("");
-  const [swapTokenIn, setSwapTokenIn] = useState<"token0" | "token1">("token0");
-  const [txSuccess, setTxSuccess] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
-
-  const pool = pools.find((p) => p.id === poolId);
-
-  // Helper to handle successful operations
-  const handleSuccess = (result: { hash?: string; userOpHash?: string }) => {
-    if (result?.hash) {
-      setTxHash(result.hash);
-      setTxSuccess(true);
-      refetchPools();
-      refetchWallet();
-      // Reset success state after a delay
-      setTimeout(() => {
-        setTxSuccess(false);
-        setTxHash(null);
-      }, 5000);
-    }
-  };
-
-  if (poolsLoading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-black">
-        <Header />
-        <main className="flex-1 pt-20 pb-20 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-          <Loader2 className="w-12 h-12 text-primary animate-spin" />
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  if (!pool) {
-    return (
-      <div className="min-h-screen flex flex-col bg-black">
-        <Header />
-        <main className="flex-1 pt-20 pb-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-4 pixel-text text-foreground">
-              POOL_NOT_FOUND
-            </h1>
-            <Link
-              to="/pools"
-              className="text-primary hover:text-primary/80 transition pixel-text"
-            >
-              Back to Pools
-            </Link>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+  // ... (activeTab state) ...
 
   const handleAddLiquidity = async () => {
     if (!isConnected) {
@@ -97,16 +38,38 @@ export default function PoolDetail() {
     }
 
     try {
-      // Calculate tick range (simplified)
-      const tickLower = -60;
-      const tickUpper = 60;
-      const liquidityDelta = parseEther(addAmount0 || "0");
+      const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter
+
+      // 1. Approve Tokens
+      const amount0Wei = parseEther(addAmount0 || "0");
+      const amount1Wei = parseEther(addAmount1 || "0");
+
+      if (pool.poolKey.currency0 !== "0x0000000000000000000000000000000000000000" && amount0Wei > 0n) {
+        await approveToken(pool.poolKey.currency0, ROUTER_ADDRESS, amount0Wei);
+      }
+      if (pool.poolKey.currency1 !== "0x0000000000000000000000000000000000000000" && amount1Wei > 0n) {
+        await approveToken(pool.poolKey.currency1, ROUTER_ADDRESS, amount1Wei);
+      }
+
+      // 2. Add Liquidity
+      // Calculate tick range (simplified - full range)
+      const tickLower = -887220;
+      const tickUpper = 887220;
+
+      // Approximation: Use amount0 as liquidityDelta proxy for demo
+      const liquidityDelta = amount0Wei;
+
+      // Calculate ETH Value
+      let ethValue = "0";
+      if (pool.poolKey.currency0 === "0x0000000000000000000000000000000000000000") ethValue = amount0Wei.toString();
+      if (pool.poolKey.currency1 === "0x0000000000000000000000000000000000000000") ethValue = amount1Wei.toString();
 
       const result = await addLiquidity(
         pool.poolKey,
         tickLower,
         tickUpper,
         liquidityDelta,
+        ethValue
       );
 
       handleSuccess(result);
@@ -119,15 +82,16 @@ export default function PoolDetail() {
   };
 
   const handleRemoveLiquidity = async () => {
+    // ... (No approvals needed for removeLiquidity usually, unless permit is used, but for now standard)
     if (!isConnected) {
       alert("Please connect MetaMask Flask first");
       return;
     }
 
     try {
-      const tickLower = -60;
-      const tickUpper = 60;
-      const liquidityDelta = -parseEther(removeAmount || "0");
+      const tickLower = -887220;
+      const tickUpper = 887220;
+      const liquidityDelta = parseEther(removeAmount || "0"); // Helper handles negation
 
       const result = await removeLiquidity(
         pool.poolKey,
@@ -151,15 +115,32 @@ export default function PoolDetail() {
     }
 
     try {
+      const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter
+
       const zeroForOne = swapTokenIn === "token0";
       const amountSpecified = parseEther(swapAmountIn || "0");
       const sqrtPriceLimitX96 = 0n; // No limit
+
+      // 1. Approve Token In
+      const tokenIn = zeroForOne ? pool.poolKey.currency0 : pool.poolKey.currency1;
+
+      // Only approve if not ETH
+      if (tokenIn !== "0x0000000000000000000000000000000000000000" && amountSpecified > 0n) {
+        await approveToken(tokenIn, ROUTER_ADDRESS, amountSpecified);
+      }
+
+      // Calculate ETH Value
+      let ethValue = "0";
+      if (tokenIn === "0x0000000000000000000000000000000000000000") {
+        ethValue = amountSpecified.toString();
+      }
 
       const result = await swap(
         pool.poolKey,
         zeroForOne,
         amountSpecified,
         sqrtPriceLimitX96,
+        ethValue
       );
 
       handleSuccess(result);
@@ -238,11 +219,10 @@ export default function PoolDetail() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-3 border-b-2 transition pixel-text font-bold ${
-                  activeTab === tab
+                className={`px-6 py-3 border-b-2 transition pixel-text font-bold ${activeTab === tab
                     ? "border-primary text-primary"
                     : "border-transparent text-foreground/60 hover:text-foreground"
-                }`}
+                  }`}
               >
                 {tab.toUpperCase()}
               </button>

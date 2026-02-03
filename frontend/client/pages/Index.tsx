@@ -100,9 +100,25 @@ export default function Index() {
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{'> usdc:'}</span>
                       <span className="text-primary">
-                        {tokenBalances.find(t => t.symbol === 'USDC') 
-                          ? `${tokenBalances.find(t => t.symbol === 'USDC')?.amount} USDC` 
+                        {tokenBalances.find(t => t.symbol === 'USDC')
+                          ? `${tokenBalances.find(t => t.symbol === 'USDC')?.amount} USDC`
                           : '0.00 USDC'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-foreground/80">
+                      <span>{'> pyusd:'}</span>
+                      <span className="text-primary">
+                        {tokenBalances.find(t => t.symbol === 'PYUSD')
+                          ? `${tokenBalances.find(t => t.symbol === 'PYUSD')?.amount} PYUSD`
+                          : '0.00 PYUSD'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-foreground/80">
+                      <span>{'> link:'}</span>
+                      <span className="text-primary">
+                        {tokenBalances.find(t => t.symbol === 'LINK')
+                          ? `${tokenBalances.find(t => t.symbol === 'LINK')?.amount} LINK`
+                          : '0.00 LINK'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
