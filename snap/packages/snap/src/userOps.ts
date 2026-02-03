@@ -211,6 +211,8 @@ export type UserOperationV07 = {
   maxFeePerGas: string;
   maxPriorityFeePerGas: string;
   paymaster?: string;
+  paymasterVerificationGasLimit?: string;
+  paymasterPostOpGasLimit?: string;
   paymasterData?: string;
   signature: string;
 };
@@ -256,16 +258,23 @@ export function packedToJsonUserOp(
     factoryData = '0x' + packed.initCode.slice(42);
   }
 
-  // Handle paymaster
+  // Handle paymaster - ERC-4337 v0.7 format:
+  // paymasterAndData = [20 bytes address][16 bytes verificationGasLimit][16 bytes postOpGasLimit][remaining: paymasterData]
   let paymaster = undefined;
+  let paymasterVerificationGasLimit = undefined;
+  let paymasterPostOpGasLimit = undefined;
   let paymasterData = undefined;
   if (
     packed.paymasterAndData &&
     packed.paymasterAndData !== '0x' &&
     packed.paymasterAndData.length > 2
   ) {
-    paymaster = '0x' + packed.paymasterAndData.slice(2, 42);
-    paymasterData = '0x' + packed.paymasterAndData.slice(42);
+    // Format: 0x + 40 hex chars (20 bytes address) + 32 hex chars (16 bytes verificationGas) + 32 hex chars (16 bytes postOpGas) + remaining
+    const pmData = packed.paymasterAndData.slice(2); // remove 0x
+    paymaster = '0x' + pmData.slice(0, 40); // 20 bytes = 40 hex chars
+    paymasterVerificationGasLimit = toHex(BigInt('0x' + pmData.slice(40, 72))); // 16 bytes = 32 hex chars
+    paymasterPostOpGasLimit = toHex(BigInt('0x' + pmData.slice(72, 104))); // 16 bytes = 32 hex chars
+    paymasterData = '0x' + (pmData.slice(104) || ''); // remaining bytes
   }
 
   return {
@@ -287,10 +296,53 @@ export function packedToJsonUserOp(
     maxFeePerGas: toHex(maxFeePerGas),
     maxPriorityFeePerGas: toHex(maxPriorityFeePerGas),
 
-    ...(paymaster ? { paymaster, paymasterData } : {}),
+    ...(paymaster ? { paymaster, paymasterVerificationGasLimit, paymasterPostOpGasLimit, paymasterData } : {}),
 
     signature: packed.signature,
   };
+}
+
+/**
+ * Fetch gas prices from Pimlico bundler
+ */
+export async function fetchPimlicoGasPrices(bundlerUrl: string): Promise<{
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+}> {
+  try {
+    const response = await fetch(bundlerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'pimlico_getUserOperationGasPrice',
+        params: [],
+      }),
+    });
+
+    const result = await response.json();
+    if (result.error) {
+      console.warn('[YELLOW-SDK] Pimlico gas price fetch failed:', result.error);
+      throw new Error(result.error.message);
+    }
+
+    // Pimlico returns { slow, standard, fast } - use fast for reliability
+    const gasPrices = result.result.fast;
+    console.log('[YELLOW-SDK] Pimlico gas prices (fast):', gasPrices);
+
+    return {
+      maxFeePerGas: BigInt(gasPrices.maxFeePerGas),
+      maxPriorityFeePerGas: BigInt(gasPrices.maxPriorityFeePerGas),
+    };
+  } catch (error) {
+    console.warn('[YELLOW-SDK] Failed to fetch Pimlico gas prices, using defaults:', error);
+    // Fallback to higher defaults
+    return {
+      maxFeePerGas: parseUnits('100', 'gwei'),
+      maxPriorityFeePerGas: parseUnits('10', 'gwei'),
+    };
+  }
 }
 
 /**
@@ -307,6 +359,10 @@ export async function constructUserOp(params: {
   salt: number;
   factoryAddress: string;
   paymasterAddress?: string;
+  gasPrices?: {
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
+  };
 }): Promise<PackedUserOperation> {
   const {
     accountAddress,
@@ -319,6 +375,7 @@ export async function constructUserOp(params: {
     salt,
     factoryAddress,
     paymasterAddress,
+    gasPrices,
   } = params;
 
   // Validate critical addresses
@@ -402,19 +459,46 @@ export async function constructUserOp(params: {
     ]);
   }
 
-  // 5. Gas Estimation
-  const feeData = await provider.getFeeData();
-  const maxFeePerGas = feeData.maxFeePerGas || parseUnits('50', 'gwei');
-  const maxPriorityFeePerGas =
-    feeData.maxPriorityFeePerGas || parseUnits('5', 'gwei');
+  // 5. Gas Estimation - use provided Pimlico gas prices if available
+  let maxFeePerGas: bigint;
+  let maxPriorityFeePerGas: bigint;
+  
+  if (gasPrices) {
+    maxFeePerGas = gasPrices.maxFeePerGas;
+    maxPriorityFeePerGas = gasPrices.maxPriorityFeePerGas;
+    console.log('[YELLOW-SDK] Using Pimlico gas prices:', {
+      maxFeePerGas: maxFeePerGas.toString(),
+      maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+    });
+  } else {
+    const feeData = await provider.getFeeData();
+    maxFeePerGas = feeData.maxFeePerGas || parseUnits('50', 'gwei');
+    maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || parseUnits('5', 'gwei');
+    console.log('[YELLOW-SDK] Using provider gas prices (fallback)');
+  }
 
-  const paymasterAndData = paymasterAddress || '0x';
+  // ERC-4337 v0.7 paymasterAndData format:
+  // [20 bytes paymaster address][16 bytes verificationGasLimit][16 bytes postOpGasLimit][remaining: paymasterData]
+  let paymasterAndData = '0x';
+  if (paymasterAddress && paymasterAddress !== '0x') {
+    const paymasterVerificationGasLimit = 100_000n;
+    const paymasterPostOpGasLimit = 50_000n;
+    // Pack: address (20 bytes) + verificationGas (16 bytes) + postOpGas (16 bytes)
+    const verificationGasHex = paymasterVerificationGasLimit
+      .toString(16)
+      .padStart(32, '0');
+    const postOpGasHex = paymasterPostOpGasLimit.toString(16).padStart(32, '0');
+    // Strip 0x from address before concatenating
+    const addressWithout0x = paymasterAddress.toLowerCase().replace('0x', '');
+    paymasterAndData =
+      '0x' + addressWithout0x + verificationGasHex + postOpGasHex;
+  }
 
   // Explicit v0.7 gas limits
   const gasFees = packGasFees(maxPriorityFeePerGas, maxFeePerGas);
   const verificationGasLimit = 1_000_000n;
   const callGasLimit = 1_000_000n;
-  const preVerificationGas = 100_000n;
+  const preVerificationGas = 200_000n; // Increased from 100k - bundler requires ~122k+
 
   const accountGasLimits = packAccountGasLimits(
     verificationGasLimit,

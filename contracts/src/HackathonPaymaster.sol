@@ -9,18 +9,18 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title HackathonPaymaster
  * @dev Simple paymaster that sponsors gas for quantum-safe accounts
- * @notice For hackathon/testnet use - sponsors up to 50M gas per account
+ * @notice For hackathon/testnet use - sponsors up to 1 ETH per account
  */
 contract HackathonPaymaster is IPaymaster, Ownable {
     IEntryPoint public immutable entryPoint;
 
-    // Max gas sponsored per account
-    uint256 public constant MAX_GAS_PER_ACCOUNT = 50_000_000;
+    // Max ETH sponsored per account (in wei) - 1 ETH
+    uint256 public constant MAX_SPONSORED_PER_ACCOUNT = 1 ether;
 
-    // Track gas used by each account
-    mapping(address => uint256) public sponsoredGas;
+    // Track ETH used by each account (in wei)
+    mapping(address => uint256) public sponsoredAmount;
 
-    event GasSponsored(address indexed account, uint256 gasAmount);
+    event GasSponsored(address indexed account, uint256 costInWei);
 
     error OnlyEntryPoint();
 
@@ -43,14 +43,14 @@ contract HackathonPaymaster is IPaymaster, Ownable {
     ) external override onlyEntryPoint returns (bytes memory context, uint256 validationData) {
         address account = userOp.sender;
 
-        // Check if account hasn't exceeded gas limit
+        // Check if account hasn't exceeded sponsorship limit (maxCost is in wei)
         require(
-            sponsoredGas[account] + maxCost <= MAX_GAS_PER_ACCOUNT,
-            "Gas limit exceeded"
+            sponsoredAmount[account] + maxCost <= MAX_SPONSORED_PER_ACCOUNT,
+            "Sponsorship limit exceeded"
         );
 
-        // Track the gas
-        sponsoredGas[account] += maxCost;
+        // Track the sponsored amount
+        sponsoredAmount[account] += maxCost;
 
         emit GasSponsored(account, maxCost);
 

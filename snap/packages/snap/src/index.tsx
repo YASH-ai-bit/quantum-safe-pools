@@ -28,6 +28,7 @@ import {
   ENTRYPOINT_ADDRESS,
   type PackedUserOperation,
   packedToJsonUserOp,
+  fetchPimlicoGasPrices,
 } from './userOps';
 
 // Helper for yellow terminal logs
@@ -537,6 +538,12 @@ async function handleSendTransaction(origin: string, params: any) {
     );
   }
 
+  // Fetch gas prices from Pimlico bundler for accurate pricing
+  const bundlerUrl =
+    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
+  logYellow('Fetching gas prices from Pimlico...');
+  const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
+
   // Construct UserOperation via SDK-optimized helper
   logYellow('Constructing UserOp for transaction...', { to, value, useBatch });
 
@@ -551,6 +558,7 @@ async function handleSendTransaction(origin: string, params: any) {
     salt,
     factoryAddress,
     paymasterAddress,
+    gasPrices,
   });
 
   // Calculate userOpHash
@@ -607,8 +615,7 @@ async function handleSendTransaction(origin: string, params: any) {
   logYellow('Submitting UserOp to bundler...');
 
   try {
-    const bundlerUrl =
-      'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
+    // bundlerUrl already defined above when fetching gas prices
 
     const bundlerResponse = await fetch(bundlerUrl, {
       method: 'POST',

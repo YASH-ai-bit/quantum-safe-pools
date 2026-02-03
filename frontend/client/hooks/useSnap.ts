@@ -355,7 +355,11 @@ export function useSnap() {
 
       // Check for error first (snap already tried bundler and failed)
       if (result.error) {
-        console.error('%c[SNAP] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+        console.error(
+          "%c[SNAP] ❌ Snap returned error:",
+          "color: #ff0000; font-weight: bold;",
+          result.error,
+        );
         throw new Error(result.error);
       }
 
@@ -401,8 +405,8 @@ export function useSnap() {
 
       // Unexpected response
       if (!result.transactionHash) {
-
-      throw new Error("Unexpected response from snap");
+        throw new Error("Unexpected response from snap");
+      }
     } catch (err) {
       console.error(
         "%c[SNAP] ❌ Transaction failed:",
