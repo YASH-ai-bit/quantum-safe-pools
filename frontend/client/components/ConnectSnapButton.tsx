@@ -34,13 +34,13 @@ export default function ConnectSnapButton() {
 
   // Check if user is quantum-safe on-chain
   const refreshQuantumStatus = useCallback(async () => {
-    const addressToCheck = accountAddress || userAddress;
-    
+    const addressToCheck = userAddress || accountAddress;
+
     // Validate address format
-    if (!addressToCheck || 
-        addressToCheck === '0x' || 
-        addressToCheck.length < 42 ||
-        !addressToCheck.startsWith('0x')) {
+    if (!addressToCheck ||
+      addressToCheck === '0x' ||
+      addressToCheck.length < 42 ||
+      !addressToCheck.startsWith('0x')) {
       setIsQuantumSafe(null);
       return;
     }
@@ -87,8 +87,8 @@ export default function ConnectSnapButton() {
         </div>
 
         {/* Quantum Setup Modal */}
-        <QuantumSetupModal 
-          isOpen={showSetupModal} 
+        <QuantumSetupModal
+          isOpen={showSetupModal}
           onClose={() => setShowSetupModal(false)}
           onRegistrationComplete={() => {
             // Refresh quantum status after registration
@@ -241,7 +241,7 @@ export default function ConnectSnapButton() {
                         <p className="text-foreground/60 text-xs mb-1">STATUS</p>
                         <p className="text-red-500 font-bold">⚠️ Not Quantum-Safe</p>
                       </div>
-                      
+
                       <div className="pt-3 border-t border-primary/30 space-y-3">
                         <p className="text-xs text-foreground/60 mb-3">
                           Become quantum-safe to access exclusive features:
@@ -251,7 +251,7 @@ export default function ConnectSnapButton() {
                           <li>• Reduced swap fees (0.15% vs 0.40%)</li>
                           <li>• MEV resistance protection</li>
                         </ul>
-                        
+
                         <button
                           onClick={() => {
                             setShowSetupModal(true);
@@ -262,7 +262,7 @@ export default function ConnectSnapButton() {
                           <Shield className="w-3 h-3" />
                           SETUP_QUANTUM_KEYS
                         </button>
-                        
+
                         <button
                           onClick={() => {
                             disconnectSnap();
@@ -287,8 +287,8 @@ export default function ConnectSnapButton() {
         </div>
 
         {/* Quantum Setup Modal */}
-        <QuantumSetupModal 
-          isOpen={showSetupModal} 
+        <QuantumSetupModal
+          isOpen={showSetupModal}
           onClose={() => setShowSetupModal(false)}
           onRegistrationComplete={() => {
             // Refresh quantum status after registration
@@ -321,8 +321,8 @@ export default function ConnectSnapButton() {
       </button>
 
       {/* Quantum Setup Modal */}
-      <QuantumSetupModal 
-        isOpen={showSetupModal} 
+      <QuantumSetupModal
+        isOpen={showSetupModal}
         onClose={() => setShowSetupModal(false)}
         onRegistrationComplete={() => {
           // Refresh quantum status after registration

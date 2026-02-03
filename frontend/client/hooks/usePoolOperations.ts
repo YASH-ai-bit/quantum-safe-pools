@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useSnap } from './useSnap';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
 import { CONTRACTS } from '@shared/contracts';
 import { encodeFunctionData } from 'viem';
@@ -147,6 +148,9 @@ export function usePoolOperations() {
 
   const loading = isPending || isConfirming;
 
+  // Hook for Snap
+  const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction } = useSnap();
+
   const createPool = useCallback(async (
     currency0: string,
     currency1: string,
@@ -160,40 +164,76 @@ export function usePoolOperations() {
 
     setError(null);
 
-    try {
-      const poolKey: PoolKey = {
-        currency0,
-        currency1,
-        fee,
-        tickSpacing,
+    const args = [
+      {
+        currency0: currency0 as `0x${string}`,
+        currency1: currency1 as `0x${string}`,
+        fee: fee,
+        tickSpacing: tickSpacing,
         hooks: CONTRACTS.QUANTUM_HOOK || '0x0000000000000000000000000000000000000000',
-      };
+      },
+      initialPrice,
+      '0x' as `0x${string}`,
+    ];
 
+    try {
+      if (isSnapConnected) {
+        // Use Snap (Yellow Nitrolite optimized)
+        const data = encodeFunctionData({
+          abi: POOL_MANAGER_ABI,
+          functionName: 'initialize',
+          args: args as any
+        });
+
+        console.log('%c[POOL] Creating pool with quantum-safe transaction...', 'color: #00ffff; font-weight: bold;');
+
+        const result = await sendSnapTransaction(
+          CONTRACTS.POOL_MANAGER,
+          '0', // value
+          data
+        );
+
+        // Check if snap returned an error
+        if (result.error) {
+          console.error('%c[POOL] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+          if (result.logs && Array.isArray(result.logs)) {
+            console.log('%c[POOL] Snap logs:', 'color: #ffff00;', result.logs);
+          }
+          throw new Error(`Pool creation failed: ${result.error}`);
+        }
+
+        if (!result.transactionHash) {
+          console.error('%c[POOL] ⚠️ No transaction hash:', 'color: #ff9900;', result);
+          throw new Error('Pool creation failed - no transaction hash received');
+        }
+
+        console.log('%c[POOL] ✅ Pool created successfully!', 'color: #00ff00; font-weight: bold;');
+        console.log('%c[POOL] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+
+        // Return the transaction hash from the bundler receipt
+        return {
+          hash: result.transactionHash as `0x${string}`,
+          userOpHash: result.userOpHash,
+        };
+      }
+
+      // Fallback to standard wagmi (likely to fail if Quantum Hook enforces it)
       writeContract({
         address: CONTRACTS.POOL_MANAGER as `0x${string}`,
         abi: POOL_MANAGER_ABI,
         functionName: 'initialize',
-        args: [
-          {
-            currency0: poolKey.currency0 as `0x${string}`,
-            currency1: poolKey.currency1 as `0x${string}`,
-            fee: poolKey.fee,
-            tickSpacing: poolKey.tickSpacing,
-            hooks: poolKey.hooks as `0x${string}`,
-          },
-          initialPrice,
-          '0x' as `0x${string}`,
-        ],
+        args: args as any,
         chainId: sepolia.id,
       } as any);
 
       return { hash };
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to create pool';
+      console.error('%c[POOL] ❌ Pool creation failed:', 'color: #ff0000; font-weight: bold;', errorMsg);
       setError(errorMsg);
       throw new Error(errorMsg);
     }
-  }, [isConnected, address, writeContract, hash]);
+  }, [isConnected, address, writeContract, hash, isSnapConnected, sendSnapTransaction]);
 
   const addLiquidity = useCallback(async (
     poolKey: PoolKey,

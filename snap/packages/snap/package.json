@@ -27,6 +27,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@erc7824/nitrolite": "^0.5.3",
     "@metamask/snaps-sdk": "~10.3.0",
     "@noir-lang/backend_barretenberg": "^0.32.0",
     "@noir-lang/noir_js": "^0.32.0",

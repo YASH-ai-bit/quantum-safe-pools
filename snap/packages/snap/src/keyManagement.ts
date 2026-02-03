@@ -4,15 +4,16 @@ import { keccak256 } from 'ethers';
 /**
  * Snap state interface
  */
-export interface SnapState {
+export type SnapState = {
   dilithiumPublicKey?: number[]; // Stored as array for JSON compatibility
   dilithiumPrivateKey?: number[]; // Encrypted by MetaMask
   accountSalt?: number;
   publicKeyHash?: string;
-}
+};
 
 /**
  * Generate a Dilithium keypair from snap's deterministic entropy
+ *
  * @returns Promise resolving to generated keypair
  */
 export async function generateDilithiumKeypair(): Promise<{
@@ -23,18 +24,20 @@ export async function generateDilithiumKeypair(): Promise<{
   const keyPair = await dilithium.keyPair();
 
   // Validate keypair was generated
-  if (!keyPair || !keyPair.publicKey || !keyPair.privateKey) {
+  if (!keyPair?.publicKey || !keyPair.privateKey) {
     throw new Error('Failed to generate Dilithium keypair');
   }
 
   // Ensure we have Uint8Array
-  const publicKey = keyPair.publicKey instanceof Uint8Array 
-    ? keyPair.publicKey 
-    : new Uint8Array(keyPair.publicKey);
-  
-  const privateKey = keyPair.privateKey instanceof Uint8Array
-    ? keyPair.privateKey
-    : new Uint8Array(keyPair.privateKey);
+  const publicKey =
+    keyPair.publicKey instanceof Uint8Array
+      ? keyPair.publicKey
+      : new Uint8Array(keyPair.publicKey);
+
+  const privateKey =
+    keyPair.privateKey instanceof Uint8Array
+      ? keyPair.privateKey
+      : new Uint8Array(keyPair.privateKey);
 
   return {
     publicKey,
@@ -74,6 +77,7 @@ export async function ensureKeypairExists(): Promise<void> {
 
 /**
  * Get the Dilithium public key from state
+ *
  * @returns Public key as Uint8Array (1,952 bytes for Dilithium3)
  */
 export async function getPublicKey(): Promise<Uint8Array> {
@@ -93,6 +97,7 @@ export async function getPublicKey(): Promise<Uint8Array> {
 
 /**
  * Get the Dilithium private key from state
+ *
  * @returns Private key as Uint8Array (4,000 bytes for Dilithium3)
  */
 async function getPrivateKey(): Promise<Uint8Array> {
@@ -110,20 +115,22 @@ async function getPrivateKey(): Promise<Uint8Array> {
 
 /**
  * Sign a message with Dilithium private key
+ *
  * @param message Message to sign (32 bytes typically)
  * @returns Dilithium signature (3,293 bytes for Dilithium3)
  */
 export async function signMessage(message: Uint8Array): Promise<Uint8Array> {
   const privateKey = await getPrivateKey();
-  
+
   // Sign with Dilithium (async)
   const signature = await dilithium.signDetached(message, privateKey);
-  
+
   return signature;
 }
 
 /**
  * Verify a Dilithium signature (for testing/validation)
+ *
  * @param message Original message
  * @param signature Dilithium signature
  * @param publicKey Public key to verify against
@@ -132,13 +139,14 @@ export async function signMessage(message: Uint8Array): Promise<Uint8Array> {
 export async function verifySignature(
   message: Uint8Array,
   signature: Uint8Array,
-  publicKey: Uint8Array
+  publicKey: Uint8Array,
 ): Promise<boolean> {
   return await dilithium.verifyDetached(signature, message, publicKey);
 }
 
 /**
  * Get the public key hash (used for on-chain storage)
+ *
  * @returns 32-byte hash of public key
  */
 export async function getPublicKeyHash(): Promise<string> {
@@ -150,7 +158,7 @@ export async function getPublicKeyHash(): Promise<string> {
   if (!state.publicKeyHash) {
     const publicKey = await getPublicKey();
     const hash = keccak256(publicKey);
-    
+
     // Update state with hash
     await snap.request({
       method: 'snap_manageState',
@@ -162,7 +170,7 @@ export async function getPublicKeyHash(): Promise<string> {
         },
       },
     });
-    
+
     return hash;
   }
 
@@ -171,6 +179,7 @@ export async function getPublicKeyHash(): Promise<string> {
 
 /**
  * Get account salt (for CREATE2 deployment)
+ *
  * @returns Salt value
  */
 export async function getAccountSalt(): Promise<number> {

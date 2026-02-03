@@ -12,7 +12,7 @@ import { parseUnits } from 'viem';
 // Common token addresses on Sepolia - these should ideally be fetched from a token registry
 // For now, keeping a minimal set for UI purposes
 const TOKEN_ADDRESSES: Record<string, string> = {
-  'ETH': '0x0000000000000000000000000000000000000000',
+  'ETH': '0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43', // Using sepETH for compatibility
   'WETH': '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', // Sepolia WETH
   'USDC': '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
 };
@@ -63,7 +63,7 @@ export default function CreatePool() {
     try {
       const tokenAObj = tokens.find(t => t.symbol === tokenA);
       const tokenBObj = tokens.find(t => t.symbol === tokenB);
-      
+
       if (!tokenAObj || !tokenBObj) {
         throw new Error('Invalid token selection');
       }
@@ -73,7 +73,7 @@ export default function CreatePool() {
       // sqrtPriceX96 = sqrt(price) * 2^96
       // For 1:1 price, sqrt(1) * 2^96 = 2^96
       const initialPrice = BigInt('79228162514264337593543950336'); // 2^96
-      
+
       // Fee in basis points (0.30% = 3000)
       const feeBps = Math.round(parseFloat(fee) * 100);
       const tickSpacing = 60; // Standard tick spacing
@@ -131,19 +131,17 @@ export default function CreatePool() {
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${
-                    s <= step
-                      ? "bg-primary text-black border-primary"
-                      : "bg-black border-primary/30 text-foreground/60"
-                  }`}
+                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${s <= step
+                    ? "bg-primary text-black border-primary"
+                    : "bg-black border-primary/30 text-foreground/60"
+                    }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`h-1 w-12 transition-all ${
-                      s < step ? "bg-primary" : "bg-primary/30"
-                    }`}
+                    className={`h-1 w-12 transition-all ${s < step ? "bg-primary" : "bg-primary/30"
+                      }`}
                   />
                 )}
               </div>
