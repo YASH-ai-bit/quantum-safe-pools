@@ -64,22 +64,33 @@ export async function calculateAccountAddress(
 
   const factory = new Contract(
     factoryAddress,
-    ['function getAddress(bytes32 publicKeyHash, uint256 salt) view returns (address)'],
+    [
+      'function getAddress(bytes32 publicKeyHash, uint256 salt) view returns (address)',
+    ],
     provider,
   );
 
   try {
     // Use getFunction().staticCall() to definitively avoid conflict with Ethers.js BaseContract.getAddress()
-    const address = await factory.getFunction('getAddress').staticCall(publicKeyHash, salt);
+    const address = await factory
+      .getFunction('getAddress')
+      .staticCall(publicKeyHash, salt);
     console.log('[YELLOW-SDK] Account address calculated:', address);
 
-    if (!address || address === '0x' || address === '0x0000000000000000000000000000000000000000') {
+    if (
+      !address ||
+      address === '0x' ||
+      address === '0x0000000000000000000000000000000000000000'
+    ) {
       throw new Error('Factory returned invalid address');
     }
 
     return address;
   } catch (err: any) {
-    console.error('[YELLOW-SDK] Failed to get account address from factory:', err);
+    console.error(
+      '[YELLOW-SDK] Failed to get account address from factory:',
+      err,
+    );
     throw new Error(`Failed to calculate account address: ${err.message}`);
   }
 }
@@ -182,7 +193,7 @@ export async function isRegistered(
 // Helper for hex conversion
 export function toHex(value: bigint | number) {
   if (value === undefined || value === null) return '0x0';
-  return "0x" + BigInt(value).toString(16);
+  return '0x' + BigInt(value).toString(16);
 }
 
 /**
@@ -212,12 +223,16 @@ export function packedToJsonUserOp(
   factoryAddress?: string,
 ): UserOperationV07 {
   // unpack gas limits
-  const accountGasLimits = packed.accountGasLimits.startsWith('0x') ? packed.accountGasLimits.slice(2) : packed.accountGasLimits;
+  const accountGasLimits = packed.accountGasLimits.startsWith('0x')
+    ? packed.accountGasLimits.slice(2)
+    : packed.accountGasLimits;
   const verificationGasLimit = BigInt('0x' + accountGasLimits.slice(0, 32));
   const callGasLimit = BigInt('0x' + accountGasLimits.slice(32));
 
   // unpack gas fees
-  const gasFees = packed.gasFees.startsWith('0x') ? packed.gasFees.slice(2) : packed.gasFees;
+  const gasFees = packed.gasFees.startsWith('0x')
+    ? packed.gasFees.slice(2)
+    : packed.gasFees;
   const maxPriorityFeePerGas = BigInt('0x' + gasFees.slice(0, 32));
   const maxFeePerGas = BigInt('0x' + gasFees.slice(32));
 
@@ -225,11 +240,15 @@ export function packedToJsonUserOp(
   let factory = undefined;
   let factoryData = undefined;
 
-  if (packed.initCode && packed.initCode !== '0x' && packed.initCode.length > 2) {
+  if (
+    packed.initCode &&
+    packed.initCode !== '0x' &&
+    packed.initCode.length > 2
+  ) {
     // In v0.7, initCode is factory + factoryData
     // But for JSON RPC, we usually split them
     // However, check if we need to explicitly pass them or if we can extract from initCode
-    // If we provided factoryAddress separately, use it. 
+    // If we provided factoryAddress separately, use it.
     // Otherwise, assume initCode = factory (20 bytes) + data
 
     // Standard v0.6/v0.7 initCode = 20-byte address + bytes
@@ -240,14 +259,20 @@ export function packedToJsonUserOp(
   // Handle paymaster
   let paymaster = undefined;
   let paymasterData = undefined;
-  if (packed.paymasterAndData && packed.paymasterAndData !== '0x' && packed.paymasterAndData.length > 2) {
+  if (
+    packed.paymasterAndData &&
+    packed.paymasterAndData !== '0x' &&
+    packed.paymasterAndData.length > 2
+  ) {
     paymaster = '0x' + packed.paymasterAndData.slice(2, 42);
     paymasterData = '0x' + packed.paymasterAndData.slice(42);
   }
 
   return {
     sender: packed.sender,
-    nonce: packed.nonce.startsWith('0x') ? packed.nonce : toHex(BigInt(packed.nonce)),
+    nonce: packed.nonce.startsWith('0x')
+      ? packed.nonce
+      : toHex(BigInt(packed.nonce)),
 
     ...(factory ? { factory, factoryData } : {}),
 
@@ -255,7 +280,9 @@ export function packedToJsonUserOp(
 
     callGasLimit: toHex(callGasLimit),
     verificationGasLimit: toHex(verificationGasLimit),
-    preVerificationGas: packed.preVerificationGas.startsWith('0x') ? packed.preVerificationGas : toHex(BigInt(packed.preVerificationGas)),
+    preVerificationGas: packed.preVerificationGas.startsWith('0x')
+      ? packed.preVerificationGas
+      : toHex(BigInt(packed.preVerificationGas)),
 
     maxFeePerGas: toHex(maxFeePerGas),
     maxPriorityFeePerGas: toHex(maxPriorityFeePerGas),
@@ -295,7 +322,11 @@ export async function constructUserOp(params: {
   } = params;
 
   // Validate critical addresses
-  if (!accountAddress || accountAddress === '0x' || accountAddress.length < 42) {
+  if (
+    !accountAddress ||
+    accountAddress === '0x' ||
+    accountAddress.length < 42
+  ) {
     console.error('[YELLOW-SDK] Invalid accountAddress:', accountAddress);
     throw new Error(`Invalid accountAddress: ${accountAddress}`);
   }
@@ -303,7 +334,11 @@ export async function constructUserOp(params: {
     console.error('[YELLOW-SDK] Invalid target address:', target);
     throw new Error(`Invalid target address: ${target}`);
   }
-  if (!factoryAddress || factoryAddress === '0x' || factoryAddress.length < 42) {
+  if (
+    !factoryAddress ||
+    factoryAddress === '0x' ||
+    factoryAddress.length < 42
+  ) {
     console.error('[YELLOW-SDK] Invalid factoryAddress:', factoryAddress);
     throw new Error(`Invalid factoryAddress: ${factoryAddress}`);
   }
@@ -320,13 +355,17 @@ export async function constructUserOp(params: {
   // 1. Get Code to check deployment
   const code = await provider.getCode(accountAddress);
   const isDeployed = code !== '0x';
-  console.log('[YELLOW-SDK] Account deployment status:', { isDeployed, codeLength: code.length });
+  console.log('[YELLOW-SDK] Account deployment status:', {
+    isDeployed,
+    codeLength: code.length,
+  });
 
   // 2. Get Nonce from EntryPoint
   // 0x7ecebe00 = getNonce(address,uint192)
-  const nonceCallData = "0x7ecebe00" +
-    accountAddress.slice(2).padStart(64, "0") +
-    "0".padStart(64, "0"); // key = 0
+  const nonceCallData =
+    '0x7ecebe00' +
+    accountAddress.slice(2).padStart(64, '0') +
+    '0'.padStart(64, '0'); // key = 0
 
   let nonce = 0n;
   try {
@@ -335,7 +374,10 @@ export async function constructUserOp(params: {
       data: nonceCallData,
     });
     nonce = BigInt(nonceResult);
-    console.log('[YELLOW-SDK] Fetched nonce from EntryPoint:', nonce.toString());
+    console.log(
+      '[YELLOW-SDK] Fetched nonce from EntryPoint:',
+      nonce.toString(),
+    );
   } catch (err) {
     console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0:', err);
   }
@@ -363,7 +405,8 @@ export async function constructUserOp(params: {
   // 5. Gas Estimation
   const feeData = await provider.getFeeData();
   const maxFeePerGas = feeData.maxFeePerGas || parseUnits('50', 'gwei');
-  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || parseUnits('5', 'gwei');
+  const maxPriorityFeePerGas =
+    feeData.maxPriorityFeePerGas || parseUnits('5', 'gwei');
 
   const paymasterAndData = paymasterAddress || '0x';
 

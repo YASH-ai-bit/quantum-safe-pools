@@ -429,7 +429,11 @@ async function handleSendTransaction(origin: string, params: any) {
   if (!to || to === '0x' || to.length < 42) {
     throw new Error(`Invalid 'to' address: ${to}`);
   }
-  if (!factoryAddress || factoryAddress === '0x' || factoryAddress.length < 42) {
+  if (
+    !factoryAddress ||
+    factoryAddress === '0x' ||
+    factoryAddress.length < 42
+  ) {
     throw new Error(`Invalid factoryAddress: ${factoryAddress}`);
   }
   if (!rpcUrl) {
@@ -514,18 +518,22 @@ async function handleSendTransaction(origin: string, params: any) {
   let batchCallData = '0x';
 
   if (!isSafe) {
-    logYellow('Account not registered. Batching registration...', { accountAddress });
+    logYellow('Account not registered. Batching registration...', {
+      accountAddress,
+    });
     useBatch = true;
 
     const registryInterface = new Interface([
-      'function register(bytes32 publicKeyHash)'
+      'function register(bytes32 publicKeyHash)',
     ]);
-    const registerData = registryInterface.encodeFunctionData('register', [publicKeyHash]);
+    const registerData = registryInterface.encodeFunctionData('register', [
+      publicKeyHash,
+    ]);
 
     batchCallData = encodeBatchExecution(
       [REGISTRY_ADDRESS, to],
       [0n, BigInt(value || 0)],
-      [registerData, data || '0x']
+      [registerData, data || '0x'],
     );
   }
 
@@ -599,7 +607,8 @@ async function handleSendTransaction(origin: string, params: any) {
   logYellow('Submitting UserOp to bundler...');
 
   try {
-    const bundlerUrl = 'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
+    const bundlerUrl =
+      'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
 
     const bundlerResponse = await fetch(bundlerUrl, {
       method: 'POST',
@@ -618,11 +627,15 @@ async function handleSendTransaction(origin: string, params: any) {
 
     if (bundlerResult.error) {
       logYellow('Bundler error', bundlerResult.error);
-      throw new Error(`Bundler rejected UserOp: ${bundlerResult.error.message}`);
+      throw new Error(
+        `Bundler rejected UserOp: ${bundlerResult.error.message}`,
+      );
     }
 
     const submittedUserOpHash = bundlerResult.result;
-    logYellow('UserOp submitted to bundler', { userOpHash: submittedUserOpHash });
+    logYellow('UserOp submitted to bundler', {
+      userOpHash: submittedUserOpHash,
+    });
 
     // Wait for transaction to be mined
     logYellow('Waiting for transaction confirmation...');
@@ -654,7 +667,7 @@ async function handleSendTransaction(origin: string, params: any) {
       }
 
       // Wait 2 seconds before next attempt
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
     if (!receipt) {
