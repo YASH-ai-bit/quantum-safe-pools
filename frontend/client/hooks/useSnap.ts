@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RPC_URLS, CHAIN_ID, CONTRACTS } from '@shared/contracts';
+import { submitUserOpToBundler, waitForUserOpReceipt } from '../utils/bundler';
 
 const SNAP_ID = 'local:http://localhost:8080'; // Update with deployed snap ID
 const DISCONNECTED_KEY = 'quantum_snap_disconnected'; // localStorage key
@@ -16,33 +17,27 @@ interface SnapState {
 // Helper to get Flask provider specifically
 function getFlaskProvider() {
   const { ethereum } = window as any;
-  
+
   if (!ethereum) {
-    console.log('No ethereum provider found');
     return null;
   }
 
   // If multiple providers exist, find Flask specifically
   if (ethereum.providers?.length) {
-    console.log('Multiple providers detected:', ethereum.providers.length);
     const flaskProvider = ethereum.providers.find((provider: any) => {
-      console.log('Checking provider:', { isMetaMask: provider.isMetaMask, isFlask: provider.isFlask });
       return provider.isMetaMask && provider.isFlask;
     });
-    
+
     if (flaskProvider) {
-      console.log('✅ Flask provider found in providers array');
       return flaskProvider;
     }
-    
+
     // Fallback: if no Flask flag, try the first MetaMask that supports snaps
     const mmProvider = ethereum.providers.find((p: any) => p.isMetaMask);
-    console.log('Trying fallback MetaMask provider');
     return mmProvider || ethereum.providers[0];
   }
 
   // Single provider - could be Flask
-  console.log('Single provider detected:', { isMetaMask: ethereum.isMetaMask, isFlask: ethereum.isFlask });
   return ethereum;
 }
 
@@ -60,47 +55,58 @@ export function useSnap() {
 
   // Check if MetaMask Flask is installed
   useEffect(() => {
+    let mounted = true;
+
     const checkFlask = async () => {
-      console.log('🔍 Checking for Flask...');
       const provider = getFlaskProvider();
-      
+
       if (!provider) {
-        console.log('❌ No provider found');
-        setSnapState((prev) => ({ ...prev, isFlask: false }));
+        if (mounted) {
+          setSnapState((prev) => ({ ...prev, isFlask: false }));
+        }
         return;
       }
 
       try {
-        console.log('📡 Testing wallet_getSnaps method...');
         // Try to call wallet_getSnaps - this method only exists in Flask
         const snaps = await provider.request({
           method: 'wallet_getSnaps',
         });
 
         // If we get here, Flask is installed
-        console.log('✅ Flask detected! Snaps:', snaps);
-        setSnapState((prev) => ({ ...prev, isFlask: true }));
-        await checkSnapInstalled();
+        if (mounted) {
+          setSnapState((prev) => ({ ...prev, isFlask: true }));
+          await checkSnapInstalled();
+        }
       } catch (err: any) {
         // If this fails, Flask is not installed
-        console.log('❌ Flask not detected. Error:', err.message || err);
-        setSnapState((prev) => ({ ...prev, isFlask: false }));
+        if (mounted) {
+          setSnapState((prev) => ({ ...prev, isFlask: false }));
+        }
       }
     };
 
     checkFlask();
-    
-    // Also listen for account changes to re-check
+
+    // Also listen for account changes to re-check (debounced)
+    let accountsChangedTimeout: NodeJS.Timeout;
     const handleAccountsChanged = () => {
-      checkFlask();
+      clearTimeout(accountsChangedTimeout);
+      accountsChangedTimeout = setTimeout(() => {
+        if (mounted) {
+          checkFlask();
+        }
+      }, 500);
     };
-    
+
     const provider = getFlaskProvider();
     if (provider) {
       provider.on('accountsChanged', handleAccountsChanged);
     }
-    
+
     return () => {
+      mounted = false;
+      clearTimeout(accountsChangedTimeout);
       if (provider) {
         provider.removeListener('accountsChanged', handleAccountsChanged);
       }
@@ -118,12 +124,12 @@ export function useSnap() {
       });
 
       const isInstalled = !!snaps[SNAP_ID];
-      
+
       // Check if user has explicitly disconnected
       const isDisconnected = localStorage.getItem(DISCONNECTED_KEY) === 'true';
-      
-      setSnapState((prev) => ({ 
-        ...prev, 
+
+      setSnapState((prev) => ({
+        ...prev,
         isInstalled,
         // Only auto-connect if snap is installed AND user hasn't disconnected
         isConnected: isInstalled && !isDisconnected
@@ -134,7 +140,7 @@ export function useSnap() {
         await loadSnapData();
       }
     } catch (err) {
-      console.error('Error checking snap:', err);
+      // Silently handle errors
     }
   };
 
@@ -163,16 +169,15 @@ export function useSnap() {
       // Clear disconnected flag when user explicitly connects
       localStorage.removeItem(DISCONNECTED_KEY);
 
-      setSnapState((prev) => ({ 
-        ...prev, 
-        isInstalled: true, 
-        isConnected: true 
+      setSnapState((prev) => ({
+        ...prev,
+        isInstalled: true,
+        isConnected: true
       }));
 
       setLoading(false);
       return true;
     } catch (err: any) {
-      console.error('Error connecting snap:', err);
       setError(err?.message || 'Failed to connect snap');
       setLoading(false);
       return false;
@@ -195,7 +200,6 @@ export function useSnap() {
         },
       });
     } catch (err) {
-      console.error('Error initializing snap:', err);
       throw err;
     }
   };
@@ -225,21 +229,20 @@ export function useSnap() {
             snapId: SNAP_ID,
             request: {
               method: 'quantum_getAccountAddress',
-            params: {
-              factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
-              rpcUrl: RPC_URLS.SEPOLIA,
-            },
+              params: {
+                factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
+                rpcUrl: RPC_URLS.SEPOLIA,
+              },
             },
           },
         });
-        
+
         // Validate address
         const addr = accountData?.address || accountData?.accountAddress;
         if (addr && addr !== '0x' && addr.length >= 42) {
           accountAddress = addr;
         }
       } catch (err) {
-        console.warn('Could not get account address (keys may not be initialized):', err);
         // This is OK - account address will be null until keys are generated
       }
 
@@ -281,7 +284,6 @@ export function useSnap() {
 
       return signature;
     } catch (err) {
-      console.error('Error signing message:', err);
       throw err;
     }
   };
@@ -296,20 +298,72 @@ export function useSnap() {
     if (!provider) throw new Error('Flask provider not found');
 
     try {
-      const txHash = await provider.request({
+      console.log('%c[SNAP] Sending quantum-safe transaction...', 'color: #00ff00; font-weight: bold;');
+
+      const result: any = await provider.request({
         method: 'wallet_invokeSnap',
         params: {
           snapId: SNAP_ID,
           request: {
             method: 'quantum_sendTransaction',
-            params: { to, value, data },
+            params: {
+              to,
+              value,
+              data,
+              factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
+              rpcUrl: RPC_URLS.SEPOLIA,
+              chainId: CHAIN_ID.SEPOLIA,
+              paymasterAddress: CONTRACTS.HACKATHON_PAYMASTER,
+            },
           },
         },
       });
 
-      return txHash;
+      // Display snap logs in browser console with yellow styling
+      if (result?.logs && Array.isArray(result.logs)) {
+        console.log('%c========== SNAP LOGS ==========', 'color: #ffff00; font-weight: bold; font-size: 14px;');
+        result.logs.forEach((log: string) => {
+          console.log(`%c${log}`, 'color: #ffff00;');
+        });
+        console.log('%c===============================', 'color: #ffff00; font-weight: bold; font-size: 14px;');
+      }
+
+      // Check if snap already handled bundler submission (has transactionHash)
+      if (result.transactionHash) {
+        console.log('%c[SNAP] ✅ Transaction confirmed by snap!', 'color: #00ff00; font-weight: bold;');
+        console.log('%c[SNAP] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+        return result;
+      }
+
+      // Snap returned signed UserOp, submit to bundler from frontend
+      if (result.userOp) {
+        console.log('%c[SNAP] UserOp signed, submitting to bundler from frontend...', 'color: #00ff00; font-weight: bold;');
+
+        const userOpHash = await submitUserOpToBundler(result.userOp, CHAIN_ID.SEPOLIA);
+
+        console.log('%c[SNAP] Waiting for transaction to be mined...', 'color: #00ff00; font-weight: bold;');
+
+        const receipt = await waitForUserOpReceipt(userOpHash, CHAIN_ID.SEPOLIA);
+
+        console.log('%c[SNAP] ✅ Transaction confirmed!', 'color: #00ff00; font-weight: bold;');
+        console.log('%c[SNAP] Transaction hash:', 'color: #00ff00;', receipt.receipt.transactionHash);
+
+        return {
+          ...result,
+          userOpHash,
+          transactionHash: receipt.receipt.transactionHash,
+          receipt,
+        };
+      }
+
+      // Error case
+      if (result.error) {
+        throw new Error(`Transaction failed: ${result.error}`);
+      }
+
+      throw new Error('Unexpected response from snap');
     } catch (err) {
-      console.error('Error sending transaction:', err);
+      console.error('%c[SNAP] ❌ Transaction failed:', 'color: #ff0000; font-weight: bold;', err);
       throw err;
     }
   };
@@ -318,7 +372,7 @@ export function useSnap() {
   const disconnectSnap = useCallback(() => {
     // Set disconnected flag to prevent auto-reconnection on page reload
     localStorage.setItem(DISCONNECTED_KEY, 'true');
-    
+
     setSnapState({
       isFlask: snapState.isFlask,
       isInstalled: snapState.isInstalled,

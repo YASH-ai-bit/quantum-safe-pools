@@ -9,10 +9,10 @@ import "../src/MockGroth16Verifier.sol";
 import "../src/HackathonPaymaster.sol";
 import "../src/QuantumHook.sol";
 import "../src/QuantumPoolRouter.sol";
-import "@account-abstraction/contracts/core/EntryPoint.sol";
-import {IEntryPoint} from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
-import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import "@account-abstraction/core/EntryPoint.sol";
+import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
+import {PoolManager} from "@uniswap/v4-core/PoolManager.sol";
+import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
 
 /**
  * @title Deploy
@@ -36,20 +36,20 @@ contract Deploy is Script {
         QuantumRegistry registry = new QuantumRegistry();
         console.log("QuantumRegistry deployed to:", address(registry));
 
-        // 3. Deploy EntryPoint
-        EntryPoint entryPoint = new EntryPoint();
-        console.log("EntryPoint deployed to:", address(entryPoint));
+        // 3. Use Canonical EntryPoint (v0.7)
+        address entryPointAddress = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
+        console.log("Using Canonical EntryPoint:", entryPointAddress);
 
         // 4. Deploy Quantum Account Factory
         QuantumAccountFactory factory = new QuantumAccountFactory(
-            IEntryPoint(address(entryPoint)),
+            IEntryPoint(entryPointAddress),
             verifier
         );
         console.log("QuantumAccountFactory deployed to:", address(factory));
 
         // 5. Deploy Hackathon Paymaster
         HackathonPaymaster paymaster = new HackathonPaymaster(
-            IEntryPoint(address(entryPoint)),
+            IEntryPoint(entryPointAddress),
             deployer // owner
         );
         console.log("HackathonPaymaster deployed to:", address(paymaster));
@@ -74,7 +74,7 @@ contract Deploy is Script {
         console.log("QUANTUM_ACCOUNT_FACTORY=", address(factory));
         console.log("GROTH16_VERIFIER=", address(verifier));
         console.log("HACKATHON_PAYMASTER=", address(paymaster));
-        console.log("ENTRYPOINT=", address(entryPoint));
+        console.log("ENTRYPOINT=", entryPointAddress);
         console.log("POOL_MANAGER=", address(poolManager));
         console.log("QUANTUM_HOOK=", address(quantumHook));
         console.log("QUANTUM_POOL_ROUTER=", address(router));

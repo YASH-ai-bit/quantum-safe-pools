@@ -1,11 +1,20 @@
-import { keccak256, concat, AbiCoder, getCreate2Address, solidityPackedKeccak256, Interface, Contract, parseUnits, type Provider } from 'ethers';
+import {
+  keccak256,
+  AbiCoder,
+  Interface,
+  Contract,
+  parseUnits,
+  concat,
+  type Provider,
+} from 'ethers';
 
 /**
  * Constants for ERC-4337
  */
 export const ENTRYPOINT_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // v0.7 EntryPoint
-export const FACTORY_ADDRESS = '0x'; // Will be set after deployment
-export const VERIFIER_ADDRESS = '0x'; // Will be set after deployment
+export const FACTORY_ADDRESS = '0x40ea8361529b917929FC6dcEC696791FCb48A52c'; // QuantumAccountFactory
+export const VERIFIER_ADDRESS = '0xD2e72EBC10E14097f628e04e460ED232fA2887bc'; // Groth16Verifier
+export const REGISTRY_ADDRESS = '0x25e6D39FC1888BDD36a6004a88467E8BFb38D3B2'; // QuantumRegistry
 
 // Default ABI coder instance
 const abiCoder = AbiCoder.defaultAbiCoder();
@@ -13,7 +22,7 @@ const abiCoder = AbiCoder.defaultAbiCoder();
 /**
  * PackedUserOperation structure (ERC-4337 v0.7)
  */
-export interface PackedUserOperation {
+export type PackedUserOperation = {
   sender: string;
   nonce: string;
   initCode: string;
@@ -23,45 +32,58 @@ export interface PackedUserOperation {
   gasFees: string; // packed: maxPriorityFeePerGas (16 bytes) + maxFeePerGas (16 bytes)
   paymasterAndData: string;
   signature: string;
-}
+};
 
 /**
- * Calculate the counterfactual address of a QuantumAccount
- * @param publicKeyHash Hash of the Dilithium public key
- * @param salt Salt for CREATE2
- * @param factoryAddress Address of the factory contract
- * @returns The deterministic address
+ * Calculate the counterfactual address of a QuantumAccount by calling the factory
  */
-export function calculateAccountAddress(
+export async function calculateAccountAddress(
   publicKeyHash: string,
   salt: number,
   factoryAddress: string,
-): string {
-  // This matches the Solidity getAddress function
-  const initCodeHash = keccak256(
-    concat([
-      // QuantumAccount creation code (will need to update with actual bytecode)
-      '0x', // Placeholder - will be filled after contract deployment
-      abiCoder.encode(
-        ['address', 'address', 'bytes32'],
-        [ENTRYPOINT_ADDRESS, VERIFIER_ADDRESS, publicKeyHash],
-      ),
-    ]),
+  provider: Provider,
+): Promise<string> {
+  // Validate inputs
+  if (!factoryAddress || factoryAddress === '0x') {
+    console.error('[YELLOW-SDK] Invalid factory address:', factoryAddress);
+    throw new Error('Invalid factory address');
+  }
+
+  if (!publicKeyHash || publicKeyHash === '0x') {
+    console.error('[YELLOW-SDK] Invalid publicKeyHash:', publicKeyHash);
+    throw new Error('Invalid publicKeyHash');
+  }
+
+  console.log('[YELLOW-SDK] Calculating account address with:', {
+    publicKeyHash,
+    salt,
+    factoryAddress,
+  });
+
+  const factory = new Contract(
+    factoryAddress,
+    ['function getAddress(bytes32 publicKeyHash, uint256 salt) view returns (address)'],
+    provider,
   );
 
-  return getCreate2Address(
-    factoryAddress,
-    solidityPackedKeccak256(['uint256'], [salt]),
-    initCodeHash,
-  );
+  try {
+    // Use getFunction().staticCall() to definitively avoid conflict with Ethers.js BaseContract.getAddress()
+    const address = await factory.getFunction('getAddress').staticCall(publicKeyHash, salt);
+    console.log('[YELLOW-SDK] Account address calculated:', address);
+
+    if (!address || address === '0x' || address === '0x0000000000000000000000000000000000000000') {
+      throw new Error('Factory returned invalid address');
+    }
+
+    return address;
+  } catch (err: any) {
+    console.error('[YELLOW-SDK] Failed to get account address from factory:', err);
+    throw new Error(`Failed to calculate account address: ${err.message}`);
+  }
 }
 
 /**
  * Encode initCode for account deployment
- * @param publicKeyHash Hash of the Dilithium public key
- * @param salt Salt for CREATE2
- * @param factoryAddress Factory contract address
- * @returns Encoded initCode
  */
 export function encodeInitCode(
   publicKeyHash: string,
@@ -82,9 +104,6 @@ export function encodeInitCode(
 
 /**
  * Pack account gas limits
- * @param verificationGasLimit Gas limit for validation (16 bytes)
- * @param callGasLimit Gas limit for execution (16 bytes)
- * @returns Packed gas limits as hex string
  */
 export function packAccountGasLimits(
   verificationGasLimit: bigint,
@@ -92,14 +111,11 @@ export function packAccountGasLimits(
 ): string {
   const verificationHex = verificationGasLimit.toString(16).padStart(32, '0');
   const callHex = callGasLimit.toString(16).padStart(32, '0');
-  return '0x' + verificationHex + callHex;
+  return `0x${verificationHex}${callHex}`;
 }
 
 /**
  * Pack gas fees
- * @param maxPriorityFeePerGas Max priority fee (16 bytes)
- * @param maxFeePerGas Max fee per gas (16 bytes)
- * @returns Packed gas fees as hex string
  */
 export function packGasFees(
   maxPriorityFeePerGas: bigint,
@@ -107,14 +123,11 @@ export function packGasFees(
 ): string {
   const priorityHex = maxPriorityFeePerGas.toString(16).padStart(32, '0');
   const maxHex = maxFeePerGas.toString(16).padStart(32, '0');
-  return '0x' + priorityHex + maxHex;
+  return `0x${priorityHex}${maxHex}`;
 }
 
 /**
  * Get nonce from EntryPoint
- * @param accountAddress Address of the quantum account
- * @param provider Ethers provider
- * @returns Current nonce
  */
 export async function getAccountNonce(
   accountAddress: string,
@@ -128,17 +141,13 @@ export async function getAccountNonce(
 
   try {
     return await entryPoint.getNonce(accountAddress, 0);
-  } catch (error) {
-    // Account might not exist yet
+  } catch (_error) {
     return 0n;
   }
 }
 
 /**
  * Check if account is deployed
- * @param accountAddress Address to check
- * @param provider Ethers provider
- * @returns true if deployed
  */
 export async function isAccountDeployed(
   accountAddress: string,
@@ -149,15 +158,121 @@ export async function isAccountDeployed(
 }
 
 /**
+ * Check if account is registered in QuantumRegistry
+ */
+export async function isRegistered(
+  accountAddress: string,
+  provider: Provider,
+): Promise<boolean> {
+  const registry = new Contract(
+    REGISTRY_ADDRESS,
+    ['function isQuantumSafe(address user) view returns (bool)'],
+    provider,
+  );
+
+  try {
+    return await registry.isQuantumSafe(accountAddress);
+  } catch (err) {
+    return false;
+  }
+}
+
+// Helper for hex conversion
+export function toHex(value: bigint | number) {
+  if (value === undefined || value === null) return '0x0';
+  return "0x" + BigInt(value).toString(16);
+}
+
+/**
+ * JSON UserOperation v0.7 (Expanded for Bundler)
+ */
+export type UserOperationV07 = {
+  sender: string;
+  nonce: string; // hex
+  factory?: string;
+  factoryData?: string;
+  callData: string;
+  callGasLimit: string;
+  verificationGasLimit: string;
+  preVerificationGas: string;
+  maxFeePerGas: string;
+  maxPriorityFeePerGas: string;
+  paymaster?: string;
+  paymasterData?: string;
+  signature: string;
+};
+
+/**
+ * Convert PackedUserOperation to JSON UserOperation v0.7
+ */
+export function packedToJsonUserOp(
+  packed: PackedUserOperation,
+  factoryAddress?: string,
+): UserOperationV07 {
+  // unpack gas limits
+  const accountGasLimits = packed.accountGasLimits.startsWith('0x') ? packed.accountGasLimits.slice(2) : packed.accountGasLimits;
+  const verificationGasLimit = BigInt('0x' + accountGasLimits.slice(0, 32));
+  const callGasLimit = BigInt('0x' + accountGasLimits.slice(32));
+
+  // unpack gas fees
+  const gasFees = packed.gasFees.startsWith('0x') ? packed.gasFees.slice(2) : packed.gasFees;
+  const maxPriorityFeePerGas = BigInt('0x' + gasFees.slice(0, 32));
+  const maxFeePerGas = BigInt('0x' + gasFees.slice(32));
+
+  // Handle factory/factoryData from initCode
+  let factory = undefined;
+  let factoryData = undefined;
+
+  if (packed.initCode && packed.initCode !== '0x' && packed.initCode.length > 2) {
+    // In v0.7, initCode is factory + factoryData
+    // But for JSON RPC, we usually split them
+    // However, check if we need to explicitly pass them or if we can extract from initCode
+    // If we provided factoryAddress separately, use it. 
+    // Otherwise, assume initCode = factory (20 bytes) + data
+
+    // Standard v0.6/v0.7 initCode = 20-byte address + bytes
+    factory = '0x' + packed.initCode.slice(2, 42);
+    factoryData = '0x' + packed.initCode.slice(42);
+  }
+
+  // Handle paymaster
+  let paymaster = undefined;
+  let paymasterData = undefined;
+  if (packed.paymasterAndData && packed.paymasterAndData !== '0x' && packed.paymasterAndData.length > 2) {
+    paymaster = '0x' + packed.paymasterAndData.slice(2, 42);
+    paymasterData = '0x' + packed.paymasterAndData.slice(42);
+  }
+
+  return {
+    sender: packed.sender,
+    nonce: packed.nonce.startsWith('0x') ? packed.nonce : toHex(BigInt(packed.nonce)),
+
+    ...(factory ? { factory, factoryData } : {}),
+
+    callData: packed.callData,
+
+    callGasLimit: toHex(callGasLimit),
+    verificationGasLimit: toHex(verificationGasLimit),
+    preVerificationGas: packed.preVerificationGas.startsWith('0x') ? packed.preVerificationGas : toHex(BigInt(packed.preVerificationGas)),
+
+    maxFeePerGas: toHex(maxFeePerGas),
+    maxPriorityFeePerGas: toHex(maxPriorityFeePerGas),
+
+    ...(paymaster ? { paymaster, paymasterData } : {}),
+
+    signature: packed.signature,
+  };
+}
+
+/**
  * Construct a PackedUserOperation
- * @param params Parameters for the user operation
- * @returns PackedUserOperation ready to be signed
  */
 export async function constructUserOp(params: {
   accountAddress: string;
   target: string;
   value: bigint;
   data: string;
+  callData?: string;
   provider: Provider;
   publicKeyHash: string;
   salt: number;
@@ -169,6 +284,7 @@ export async function constructUserOp(params: {
     target,
     value,
     data,
+    callData: providedCallData,
     provider,
     publicKeyHash,
     salt,
@@ -176,83 +292,97 @@ export async function constructUserOp(params: {
     paymasterAddress,
   } = params;
 
-  // Check if account is deployed
-  const isDeployed = await isAccountDeployed(accountAddress, provider);
+  // 1. Get Code to check deployment
+  const code = await provider.getCode(accountAddress);
+  const isDeployed = code !== '0x';
+  console.log('[YELLOW-SDK] Account deployment status:', { isDeployed, codeLength: code.length });
 
-  // Get nonce
-  const nonce = await getAccountNonce(accountAddress, provider);
+  // 2. Get Nonce from EntryPoint
+  // 0x7ecebe00 = getNonce(address,uint192)
+  const nonceCallData = "0x7ecebe00" +
+    accountAddress.slice(2).padStart(64, "0") +
+    "0".padStart(64, "0"); // key = 0
 
-  // Encode initCode if account not deployed
-  const initCode = isDeployed
-    ? '0x'
-    : encodeInitCode(publicKeyHash, salt, factoryAddress);
+  let nonce = 0n;
+  try {
+    const nonceResult = await provider.call({
+      to: ENTRYPOINT_ADDRESS,
+      data: nonceCallData,
+    });
+    nonce = BigInt(nonceResult);
+    console.log('[YELLOW-SDK] Fetched nonce from EntryPoint:', nonce.toString());
+  } catch (err) {
+    console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0:', err);
+  }
 
-  // Encode the execution call
-  const accountInterface = new Interface([
-    'function execute(address dest, uint256 value, bytes calldata func)',
-  ]);
-  const callData = accountInterface.encodeFunctionData('execute', [
-    target,
-    value,
-    data,
-  ]);
+  // 3. Generate initCode (for PACKED structure)
+  let initCode = '0x';
+  if (!isDeployed) {
+    initCode = encodeInitCode(publicKeyHash, salt, factoryAddress);
+    console.log('[YELLOW-SDK] Generated initCode for deployment');
+  }
 
-  // Get gas price from network
+  // 4. Construction CallData
+  let callData = providedCallData;
+  if (!callData) {
+    const accountInterface = new Interface([
+      'function execute(address dest, uint256 value, bytes calldata func)',
+    ]);
+    callData = accountInterface.encodeFunctionData('execute', [
+      target,
+      value,
+      data,
+    ]);
+  }
+
+  // 5. Gas Estimation
   const feeData = await provider.getFeeData();
-  const maxFeePerGas = feeData.maxFeePerGas || parseUnits('20', 'gwei');
-  const maxPriorityFeePerGas =
-    feeData.maxPriorityFeePerGas || parseUnits('2', 'gwei');
+  const maxFeePerGas = feeData.maxFeePerGas || parseUnits('50', 'gwei');
+  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || parseUnits('5', 'gwei');
 
-  // Gas limits - these are estimates
-  // For quantum-safe verification, we need high verification gas
-  const verificationGasLimit = 10_000_000n; // 10M for mock verifier (will be 250k with zkSNARK)
-  const callGasLimit = 200_000n; // For execute() call
-  const preVerificationGas = 100_000n; // Fixed overhead
+  const paymasterAndData = paymasterAddress || '0x';
 
-  // Pack gas parameters
+  // Explicit v0.7 gas limits
+  const gasFees = packGasFees(maxPriorityFeePerGas, maxFeePerGas);
+  const verificationGasLimit = 1_000_000n;
+  const callGasLimit = 1_000_000n;
+  const preVerificationGas = 100_000n;
+
   const accountGasLimits = packAccountGasLimits(
     verificationGasLimit,
     callGasLimit,
   );
-  const gasFees = packGasFees(maxPriorityFeePerGas, maxFeePerGas);
-
-  // Paymaster and data
-  const paymasterAndData = paymasterAddress || '0x';
 
   return {
     sender: accountAddress,
-    nonce: nonce.toString(),
+    nonce: toHex(nonce), // Ensure hex for consistency
     initCode,
     callData,
     accountGasLimits,
-    preVerificationGas: preVerificationGas.toString(),
+    preVerificationGas: toHex(preVerificationGas),
     gasFees,
     paymasterAndData,
-    signature: '0x', // Will be filled after signing
+    signature: '0x',
   };
 }
 
 /**
  * Calculate the userOpHash for signing
- * @param userOp The user operation
- * @param chainId Current chain ID
- * @returns Hash to be signed with Dilithium
  */
 export function getUserOpHash(
   userOp: PackedUserOperation,
   chainId: number,
 ): string {
-  // Pack the UserOp according to ERC-4337 v0.7 spec
   const packedData = abiCoder.encode(
     [
-      'address', // sender
-      'uint256', // nonce
-      'bytes32', // initCode hash
-      'bytes32', // callData hash
-      'bytes32', // accountGasLimits
-      'uint256', // preVerificationGas
-      'bytes32', // gasFees
-      'bytes32', // paymasterAndData hash
+      'address',
+      'uint256',
+      'bytes32',
+      'bytes32',
+      'bytes32',
+      'uint256',
+      'bytes32',
+      'bytes32',
     ],
     [
       userOp.sender,
@@ -268,7 +398,6 @@ export function getUserOpHash(
 
   const packedHash = keccak256(packedData);
 
-  // Add EntryPoint and chainId
   const userOpHash = keccak256(
     abiCoder.encode(
       ['bytes32', 'address', 'uint256'],
@@ -281,10 +410,6 @@ export function getUserOpHash(
 
 /**
  * Encode batch execution call
- * @param targets Array of target addresses
- * @param values Array of ETH values
- * @param datas Array of call datas
- * @returns Encoded batch execution calldata
  */
 export function encodeBatchExecution(
   targets: string[],

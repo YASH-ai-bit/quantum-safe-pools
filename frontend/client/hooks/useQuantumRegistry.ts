@@ -55,7 +55,12 @@ export function useQuantumRegistry() {
 
   // Check if an address is quantum-safe
   const checkQuantumSafe = useCallback(async (address: string): Promise<boolean> => {
-    if (!address || address === '0x0000000000000000000000000000000000000000') {
+    // Validate address format
+    if (!address || 
+        address === '0x' || 
+        address === '0x0000000000000000000000000000000000000000' ||
+        address.length < 42 ||
+        !address.startsWith('0x')) {
       return false;
     }
 
@@ -114,7 +119,17 @@ export function useQuantumRegistry() {
         signer
       );
 
-      const tx = await registry.register(publicKeyHash);
+      // Convert hex string to bytes32
+      // Remove '0x' prefix if present and ensure it's 64 hex chars (32 bytes)
+      const cleanHash = publicKeyHash.startsWith('0x') 
+        ? publicKeyHash.slice(2) 
+        : publicKeyHash;
+      
+      // Pad to 64 hex characters (32 bytes)
+      const paddedHash = cleanHash.padStart(64, '0').slice(0, 64);
+      const bytes32Hash = '0x' + paddedHash;
+
+      const tx = await registry.register(bytes32Hash);
       await tx.wait();
 
       setIsLoading(false);

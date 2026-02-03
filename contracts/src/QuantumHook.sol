@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IHooks} from "@uniswap/v4-core/interfaces/IHooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/types/PoolId.sol";
+import {BalanceDelta} from "@uniswap/v4-core/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/types/BeforeSwapDelta.sol";
+import {Hooks} from "@uniswap/v4-core/libraries/Hooks.sol";
 import "./QuantumRegistry.sol";
 
 /**
@@ -30,6 +30,12 @@ contract QuantumHook is IHooks {
 
     // Pool creation settings
     bool public requireQuantumForPoolCreation = true;
+
+    // On-Chain Factory Registry: Store all pool IDs for fast frontend access
+    PoolId[] public registeredPools;
+    
+    // Mapping from PoolId to PoolKey for complete pool information
+    mapping(PoolId => PoolKey) public poolKeys;
 
     // Events
     event PoolCreatedByQuantumUser(PoolId indexed poolId, address indexed creator);
@@ -90,7 +96,14 @@ contract QuantumHook is IHooks {
             revert OnlyQuantumUsersCanCreatePools();
         }
 
-        emit PoolCreatedByQuantumUser(key.toId(), sender);
+        // Register the pool ID in on-chain storage for fast frontend access
+        PoolId poolId = key.toId();
+        registeredPools.push(poolId);
+        
+        // Store the pool key for easy retrieval
+        poolKeys[poolId] = key;
+
+        emit PoolCreatedByQuantumUser(poolId, sender);
         
         return IHooks.beforeInitialize.selector;
     }
@@ -262,6 +275,32 @@ contract QuantumHook is IHooks {
             return true;
         }
         return registry.isQuantumSafe(user);
+    }
+
+    /**
+     * @dev Get all registered pool IDs (On-Chain Factory Registry)
+     * @notice Returns the complete list of pools for fast frontend access
+     * @return Array of all registered Pool IDs
+     */
+    function getRegisteredPools() external view returns (PoolId[] memory) {
+        return registeredPools;
+    }
+
+    /**
+     * @dev Get the total number of registered pools
+     * @return The count of registered pools
+     */
+    function getRegisteredPoolsCount() external view returns (uint256) {
+        return registeredPools.length;
+    }
+
+    /**
+     * @dev Get the pool key for a specific pool ID
+     * @param poolId The pool ID to look up
+     * @return The pool key associated with this pool ID
+     */
+    function getPoolKey(PoolId poolId) external view returns (PoolKey memory) {
+        return poolKeys[poolId];
     }
 }
 

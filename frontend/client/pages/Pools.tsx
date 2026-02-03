@@ -6,20 +6,9 @@ import { useState } from "react";
 import { usePools } from "@/hooks/usePools";
 import { ethers } from "ethers";
 
-// Common token addresses on Sepolia (using WETH and USDC test tokens)
-const TOKEN_SYMBOLS: Record<string, string> = {
-  '0x0000000000000000000000000000000000000000': 'ETH',
-  '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984': 'UNI',
-  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': 'USDC',
-};
-
 function formatAddress(address: string): string {
   if (!address) return 'Unknown';
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
-function getTokenSymbol(address: string): string {
-  return TOKEN_SYMBOLS[address] || formatAddress(address);
 }
 
 export default function Pools() {
@@ -34,7 +23,7 @@ export default function Pools() {
     : 0;
 
   const filteredPools = pools.filter((pool) => {
-    const pair = `${getTokenSymbol(pool.poolKey.currency0)}-${getTokenSymbol(pool.poolKey.currency1)}`;
+    const pair = `${pool.token0Symbol || formatAddress(pool.poolKey.currency0)}-${pool.token1Symbol || formatAddress(pool.poolKey.currency1)}`;
     return pair.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
@@ -129,7 +118,7 @@ export default function Pools() {
           {!loading && filteredPools.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPools.map((pool) => {
-                const pair = `${getTokenSymbol(pool.poolKey.currency0)}-${getTokenSymbol(pool.poolKey.currency1)}`;
+                const pair = `${pool.token0Symbol || formatAddress(pool.poolKey.currency0)}-${pool.token1Symbol || formatAddress(pool.poolKey.currency1)}`;
                 const feePercent = (pool.poolKey.fee / 10000).toFixed(2);
                 return (
                   <div
