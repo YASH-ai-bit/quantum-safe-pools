@@ -1,20 +1,28 @@
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { ArrowRight, Plus, Info, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import {
+  ArrowRight,
+  Plus,
+  Info,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
+import { useState } from "react";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
 import { useSnap } from "@/hooks/useSnap";
-import { parseUnits } from 'viem';
+import { parseUnits } from "viem";
 
 // Common token addresses on Sepolia - these should ideally be fetched from a token registry
-// For now, keeping a minimal set for UI purposes
 const TOKEN_ADDRESSES: Record<string, string> = {
-  'ETH': '0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43', // Using sepETH for compatibility
-  'WETH': '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', // Sepolia WETH
-  'USDC': '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
+  ETH: "0x0000000000000000000000000000000000000000", // Native ETH (address(0) in Uniswap V4)
+  WETH: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14", // Sepolia WETH
+  USDC: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Sepolia USDC
+  USDT: "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06", // Sepolia USDT (Aave testnet)
+  DAI: "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357", // Sepolia DAI (Aave testnet)
 };
 
 export default function CreatePool() {
@@ -26,8 +34,9 @@ export default function CreatePool() {
   const [fee, setFee] = useState("0.30");
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
   const navigate = useNavigate();
-  const { createPool, loading, isSuccess, hash } = usePoolOperations();
+  const { createPool, loading } = usePoolOperations();
   const { refetch: refetchWallet } = useWalletData();
   const { refetch: refetchPools } = usePools();
   const { isConnected } = useSnap();
@@ -53,60 +62,97 @@ export default function CreatePool() {
   const handleCreatePool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConnected) {
-      setError('Please connect MetaMask Flask first');
+      setError("Please connect MetaMask Flask first");
       return;
     }
 
     setError(null);
     setTxHash(null);
+    setIsSuccess(false);
 
     try {
-      const tokenAObj = tokens.find(t => t.symbol === tokenA);
-      const tokenBObj = tokens.find(t => t.symbol === tokenB);
+      const tokenAObj = tokens.find((t) => t.symbol === tokenA);
+      const tokenBObj = tokens.find((t) => t.symbol === tokenB);
 
       if (!tokenAObj || !tokenBObj) {
-        throw new Error('Invalid token selection');
+        throw new Error("Invalid token selection");
       }
+
+      // Validate addresses are properly defined
+      if (
+        !tokenAObj.address ||
+        tokenAObj.address === "0x" ||
+        tokenAObj.address.length < 42
+      ) {
+        throw new Error(
+          `Invalid address for ${tokenA}. Please select a different token.`,
+        );
+      }
+      if (
+        !tokenBObj.address ||
+        tokenBObj.address === "0x" ||
+        tokenBObj.address.length < 42
+      ) {
+        throw new Error(
+          `Invalid address for ${tokenB}. Please select a different token.`,
+        );
+      }
+
+      console.log(
+        "%c[CREATE_POOL] Token A:",
+        "color: #00ffff;",
+        tokenA,
+        tokenAObj.address,
+      );
+      console.log(
+        "%c[CREATE_POOL] Token B:",
+        "color: #00ffff;",
+        tokenB,
+        tokenBObj.address,
+      );
 
       // Calculate initial price (simplified - would use actual price oracle)
       // For now, use 1:1 ratio - convert to sqrtPriceX96
       // sqrtPriceX96 = sqrt(price) * 2^96
       // For 1:1 price, sqrt(1) * 2^96 = 2^96
-      const initialPrice = BigInt('79228162514264337593543950336'); // 2^96
+      const initialPrice = BigInt("79228162514264337593543950336"); // 2^96
 
       // Fee in basis points (0.30% = 3000)
       const feeBps = Math.round(parseFloat(fee) * 100);
       const tickSpacing = 60; // Standard tick spacing
 
-      await createPool(
+      console.log("%c[CREATE_POOL] Fee (bps):", "color: #00ffff;", feeBps);
+      console.log(
+        "%c[CREATE_POOL] Tick spacing:",
+        "color: #00ffff;",
+        tickSpacing,
+      );
+
+      const result = await createPool(
         tokenAObj.address,
         tokenBObj.address,
         feeBps,
         tickSpacing,
-        initialPrice
+        initialPrice,
       );
 
-      // Wait for transaction hash
-      if (hash) {
-        setTxHash(hash);
+      // Set success state with transaction hash
+      if (result?.hash) {
+        setTxHash(result.hash);
+        setIsSuccess(true);
+        // Refresh data
+        refetchPools();
+        refetchWallet();
+        // Navigate to pools page after a delay
+        setTimeout(() => {
+          navigate("/pools");
+        }, 3000);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to create pool');
+      setError(err.message || "Failed to create pool");
       setStep(5); // Error step
     }
   };
-
-  // Refresh data after successful pool creation
-  useEffect(() => {
-    if (isSuccess && txHash) {
-      refetchPools();
-      refetchWallet();
-      // Navigate to pools page after a delay
-      setTimeout(() => {
-        navigate('/pools');
-      }, 3000);
-    }
-  }, [isSuccess, txHash, refetchPools, refetchWallet, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -116,11 +162,16 @@ export default function CreatePool() {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-12">
-            <Link to="/pools" className="text-primary hover:text-primary/80 transition mb-4 inline-flex items-center gap-2 pixel-text text-sm">
+            <Link
+              to="/pools"
+              className="text-primary hover:text-primary/80 transition mb-4 inline-flex items-center gap-2 pixel-text text-sm"
+            >
               <ArrowRight className="w-4 h-4 rotate-180" />
               back_to_pools
             </Link>
-            <h1 className="text-4xl font-bold mb-2 pixel-text text-foreground">CREATE_POOL</h1>
+            <h1 className="text-4xl font-bold mb-2 pixel-text text-foreground">
+              CREATE_POOL
+            </h1>
             <p className="text-foreground/60 pixel-text">
               Set up a new quantum-safe liquidity pool and start earning yields
             </p>
@@ -131,17 +182,19 @@ export default function CreatePool() {
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${s <= step
-                    ? "bg-primary text-black border-primary"
-                    : "bg-black border-primary/30 text-foreground/60"
-                    }`}
+                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${
+                    s <= step
+                      ? "bg-primary text-black border-primary"
+                      : "bg-black border-primary/30 text-foreground/60"
+                  }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`h-1 w-12 transition-all ${s < step ? "bg-primary" : "bg-primary/30"
-                      }`}
+                    className={`h-1 w-12 transition-all ${
+                      s < step ? "bg-primary" : "bg-primary/30"
+                    }`}
                   />
                 )}
               </div>
@@ -149,11 +202,16 @@ export default function CreatePool() {
           </div>
 
           {/* Form Container */}
-          <form onSubmit={handleCreatePool} className="border-2 border-primary p-8 glitch-hover">
+          <form
+            onSubmit={handleCreatePool}
+            className="border-2 border-primary p-8 glitch-hover"
+          >
             {step === 1 && (
               <div className="space-y-6">
                 <div className="pixel-text">
-                  <h2 className="text-2xl font-bold mb-2 text-foreground">SELECT_TOKEN_PAIR</h2>
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">
+                    SELECT_TOKEN_PAIR
+                  </h2>
                   <p className="text-foreground/60">
                     Choose the two tokens for your liquidity pool
                   </p>
@@ -162,7 +220,9 @@ export default function CreatePool() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Token A */}
                   <div>
-                    <label className="block text-sm font-semibold mb-3 text-foreground pixel-text">$ first_token</label>
+                    <label className="block text-sm font-semibold mb-3 text-foreground pixel-text">
+                      $ first_token
+                    </label>
                     <select
                       value={tokenA}
                       onChange={(e) => {
@@ -182,7 +242,9 @@ export default function CreatePool() {
 
                   {/* Token B */}
                   <div>
-                    <label className="block text-sm font-semibold mb-3 text-foreground pixel-text">$ second_token</label>
+                    <label className="block text-sm font-semibold mb-3 text-foreground pixel-text">
+                      $ second_token
+                    </label>
                     <select
                       value={tokenB}
                       onChange={(e) => setTokenB(e.target.value)}
@@ -206,13 +268,17 @@ export default function CreatePool() {
                     <div className="group relative">
                       <Info className="w-4 h-4 text-primary/60 cursor-help" />
                       <div className="hidden group-hover:block absolute z-10 bg-black border-2 border-primary p-2 rounded-none text-xs text-foreground/70 w-48 -left-24 top-6">
-                        Higher fees attract better yields but may reduce trading volume
+                        Higher fees attract better yields but may reduce trading
+                        volume
                       </div>
                     </div>
                   </label>
                   <div className="space-y-2">
                     {fees.map((f) => (
-                      <label key={f.value} className="flex items-center gap-3 p-3 hover:bg-primary/10 cursor-pointer transition border border-primary/30">
+                      <label
+                        key={f.value}
+                        className="flex items-center gap-3 p-3 hover:bg-primary/10 cursor-pointer transition border border-primary/30"
+                      >
                         <input
                           type="radio"
                           name="fee"
@@ -221,7 +287,9 @@ export default function CreatePool() {
                           onChange={(e) => setFee(e.target.value)}
                           className="w-4 h-4"
                         />
-                        <span className="text-foreground/80 pixel-text text-sm">{f.label}</span>
+                        <span className="text-foreground/80 pixel-text text-sm">
+                          {f.label}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -231,7 +299,8 @@ export default function CreatePool() {
                 {tokenA && tokenB && (
                   <div className="p-4 border-2 border-primary bg-primary/5">
                     <p className="text-sm text-foreground pixel-text">
-                      $ Recommended: Your selected pair {tokenA}-{tokenB} typically works well with a {fee}% fee
+                      $ Recommended: Your selected pair {tokenA}-{tokenB}{" "}
+                      typically works well with a {fee}% fee
                     </p>
                   </div>
                 )}
@@ -251,23 +320,31 @@ export default function CreatePool() {
             {step === 2 && (
               <div className="space-y-6">
                 <div className="pixel-text">
-                  <h2 className="text-2xl font-bold mb-2 text-foreground">SET_LIQUIDITY</h2>
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">
+                    SET_LIQUIDITY
+                  </h2>
                   <p className="text-foreground/60">
                     Provide equal value of both tokens to initialize the pool
                   </p>
                 </div>
 
                 <div className="p-6 border-2 border-primary bg-black mb-6">
-                  <p className="text-foreground/60 text-sm mb-2 pixel-text">$ pool_preview</p>
+                  <p className="text-foreground/60 text-sm mb-2 pixel-text">
+                    $ pool_preview
+                  </p>
                   <div className="flex items-center gap-4 pixel-text">
                     <div>
                       <p className="lg font-bold text-foreground">{tokenA}</p>
-                      <p className="text-foreground/60 text-sm">{amountA || "0"}</p>
+                      <p className="text-foreground/60 text-sm">
+                        {amountA || "0"}
+                      </p>
                     </div>
                     <Plus className="w-4 h-4 text-foreground/40" />
                     <div>
                       <p className="lg font-bold text-foreground">{tokenB}</p>
-                      <p className="text-foreground/60 text-sm">{amountB || "0"}</p>
+                      <p className="text-foreground/60 text-sm">
+                        {amountB || "0"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -302,7 +379,8 @@ export default function CreatePool() {
 
                 <div className="p-4 border-2 border-primary bg-primary/5">
                   <p className="text-sm text-foreground/80 pixel-text">
-                    You will receive LP tokens representing your share of the pool. Store these securely.
+                    You will receive LP tokens representing your share of the
+                    pool. Store these securely.
                   </p>
                 </div>
 
@@ -329,7 +407,9 @@ export default function CreatePool() {
             {step === 3 && (
               <div className="space-y-6">
                 <div className="pixel-text">
-                  <h2 className="text-2xl font-bold mb-2 text-foreground">REVIEW_CONFIRM</h2>
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">
+                    REVIEW_CONFIRM
+                  </h2>
                   <p className="text-foreground/60">
                     Review your pool configuration before creating
                   </p>
@@ -346,37 +426,56 @@ export default function CreatePool() {
 
                 <div className="space-y-4">
                   <div className="p-4 border-2 border-primary bg-black">
-                    <p className="text-foreground/60 text-sm mb-2 pixel-text">$ pool_configuration</p>
+                    <p className="text-foreground/60 text-sm mb-2 pixel-text">
+                      $ pool_configuration
+                    </p>
                     <div className="space-y-2 pixel-text text-sm">
                       <div className="flex justify-between">
                         <span className="text-foreground/80">token_pair</span>
-                        <span className="font-bold text-foreground">{tokenA}-{tokenB}</span>
+                        <span className="font-bold text-foreground">
+                          {tokenA}-{tokenB}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground/80">fee_tier</span>
-                        <span className="font-bold text-foreground">{fee}%</span>
+                        <span className="font-bold text-foreground">
+                          {fee}%
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-foreground/80">{tokenA}_initial</span>
-                        <span className="font-bold text-foreground">{amountA || '0'}</span>
+                        <span className="text-foreground/80">
+                          {tokenA}_initial
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {amountA || "0"}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-foreground/80">{tokenB}_initial</span>
-                        <span className="font-bold text-foreground">{amountB || '0'}</span>
+                        <span className="text-foreground/80">
+                          {tokenB}_initial
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {amountB || "0"}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 border-2 border-primary bg-primary/5">
                     <p className="text-sm text-foreground pixel-text">
-                      $ Note: Pool creation requires quantum-safe signature verification. Make sure you have sufficient gas fees.
+                      $ Note: Pool creation requires quantum-safe signature
+                      verification. Make sure you have sufficient gas fees.
                     </p>
                   </div>
 
                   <div className="flex items-start gap-3 p-4 border-2 border-primary bg-primary/5">
-                    <input type="checkbox" className="mt-1 w-4 h-4 border-2 border-primary" />
+                    <input
+                      type="checkbox"
+                      className="mt-1 w-4 h-4 border-2 border-primary"
+                    />
                     <label className="text-sm text-foreground/80 pixel-text">
-                      I understand that liquidity pools involve risks and I accept the terms of service
+                      I understand that liquidity pools involve risks and I
+                      accept the terms of service
                     </label>
                   </div>
                 </div>
@@ -416,7 +515,9 @@ export default function CreatePool() {
               <div className="space-y-6">
                 <div className="pixel-text text-center">
                   <CheckCircle className="w-16 h-16 text-primary mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold mb-2 text-foreground">POOL_CREATED_SUCCESSFULLY</h2>
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">
+                    POOL_CREATED_SUCCESSFULLY
+                  </h2>
                   <p className="text-foreground/60 mb-4">
                     Your pool has been created on-chain
                   </p>
@@ -426,7 +527,8 @@ export default function CreatePool() {
                     rel="noopener noreferrer"
                     className="text-primary hover:text-primary/80 transition pixel-text text-sm"
                   >
-                    View on Etherscan: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                    View on Etherscan: {txHash.slice(0, 10)}...
+                    {txHash.slice(-8)}
                   </a>
                 </div>
                 <Link to="/pools">
@@ -442,7 +544,9 @@ export default function CreatePool() {
               <div className="space-y-6">
                 <div className="pixel-text text-center">
                   <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold mb-2 text-foreground">POOL_CREATION_FAILED</h2>
+                  <h2 className="text-2xl font-bold mb-2 text-foreground">
+                    POOL_CREATION_FAILED
+                  </h2>
                   <p className="text-foreground/60 mb-4">{error}</p>
                 </div>
                 <div className="flex gap-4">
@@ -471,7 +575,9 @@ export default function CreatePool() {
               <div className="w-10 h-10 border-2 border-primary flex items-center justify-center mb-4">
                 <Info className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-bold mb-2 pixel-text text-foreground">LP_FEES</h3>
+              <h3 className="font-bold mb-2 pixel-text text-foreground">
+                LP_FEES
+              </h3>
               <p className="text-foreground/60 text-sm pixel-text">
                 Earn trading fees from every transaction in your pool
               </p>
@@ -480,7 +586,9 @@ export default function CreatePool() {
               <div className="w-10 h-10 border-2 border-primary flex items-center justify-center mb-4">
                 <Info className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-bold mb-2 pixel-text text-foreground">SMART_ROUTING</h3>
+              <h3 className="font-bold mb-2 pixel-text text-foreground">
+                SMART_ROUTING
+              </h3>
               <p className="text-foreground/60 text-sm pixel-text">
                 Automatic price discovery with optimal liquidity distribution
               </p>
@@ -489,7 +597,9 @@ export default function CreatePool() {
               <div className="w-10 h-10 border-2 border-primary flex items-center justify-center mb-4">
                 <Info className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-bold mb-2 pixel-text text-foreground">QUANTUM_SAFE</h3>
+              <h3 className="font-bold mb-2 pixel-text text-foreground">
+                QUANTUM_SAFE
+              </h3>
               <p className="text-foreground/60 text-sm pixel-text">
                 All pools are secured with post-quantum cryptography
               </p>

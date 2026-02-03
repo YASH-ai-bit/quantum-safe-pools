@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "@account-abstraction/interfaces/IAccount.sol";
-import "@account-abstraction/interfaces/IEntryPoint.sol";
-import "@account-abstraction/interfaces/PackedUserOperation.sol";
+import "./interfaces/IAccount.sol";
+import "./interfaces/IEntryPoint.sol";
+import "./interfaces/PackedUserOperation.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/IGroth16Verifier.sol";
 

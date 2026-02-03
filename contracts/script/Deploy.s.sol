@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity =0.8.26;
 
 import "forge-std/Script.sol";
 import "../src/QuantumRegistry.sol";
@@ -9,10 +9,9 @@ import "../src/MockGroth16Verifier.sol";
 import "../src/HackathonPaymaster.sol";
 import "../src/QuantumHook.sol";
 import "../src/QuantumPoolRouter.sol";
-import "@account-abstraction/core/EntryPoint.sol";
-import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
-import {PoolManager} from "@uniswap/v4-core/PoolManager.sol";
+// Use interface only - no full EntryPoint import to avoid solc version conflict
 import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
+import {PoolManager} from "@uniswap/v4-core/PoolManager.sol";
 
 /**
  * @title Deploy

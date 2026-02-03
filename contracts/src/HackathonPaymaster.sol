@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "@account-abstraction/core/BasePaymaster.sol";
-import "@account-abstraction/interfaces/PackedUserOperation.sol";
+import "./interfaces/IPaymaster.sol";
+import "./interfaces/IEntryPoint.sol";
+import "./interfaces/PackedUserOperation.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title HackathonPaymaster
  * @dev Simple paymaster that sponsors gas for quantum-safe accounts
  * @notice For hackathon/testnet use - sponsors up to 50M gas per account
  */
-contract HackathonPaymaster is BasePaymaster {
+contract HackathonPaymaster is IPaymaster, Ownable {
+    IEntryPoint public immutable entryPoint;
+
     // Max gas sponsored per account
     uint256 public constant MAX_GAS_PER_ACCOUNT = 50_000_000;
 
@@ -18,28 +22,25 @@ contract HackathonPaymaster is BasePaymaster {
 
     event GasSponsored(address indexed account, uint256 gasAmount);
 
-    constructor(IEntryPoint _entryPoint, address _owner) BasePaymaster(_entryPoint, _owner) {}
+    error OnlyEntryPoint();
 
-    /**
-     * @dev Override validation to skip ERC165 check for canonical EntryPoint
-     */
-    function _validateEntryPointInterface(IEntryPoint) internal override view {
-        // Skip validation to allow deployment with canonical v0.7 EntryPoint
-        // which might not support the specific interface ID checked by BasePaymaster
+    constructor(IEntryPoint _entryPoint, address _owner) Ownable(_owner) {
+        entryPoint = _entryPoint;
+    }
+
+    modifier onlyEntryPoint() {
+        if (msg.sender != address(entryPoint)) revert OnlyEntryPoint();
+        _;
     }
 
     /**
      * @dev Validate the paymaster user operation
-     * @param userOp The user operation
-     * @param maxCost Maximum cost that could be paid
-     * @return context Context for postOp (not used)
-     * @return validationData 0 if valid
      */
-    function _validatePaymasterUserOp(
+    function validatePaymasterUserOp(
         PackedUserOperation calldata userOp,
         bytes32,
         uint256 maxCost
-    ) internal override returns (bytes memory context, uint256 validationData) {
+    ) external override onlyEntryPoint returns (bytes memory context, uint256 validationData) {
         address account = userOp.sender;
 
         // Check if account hasn't exceeded gas limit
@@ -59,10 +60,46 @@ contract HackathonPaymaster is BasePaymaster {
     /**
      * @dev Post-operation handler (not used for now)
      */
-    function _postOp(
+    function postOp(
         PostOpMode,
         bytes calldata,
         uint256,
         uint256
-    ) internal override {}
+    ) external override onlyEntryPoint {}
+
+    /**
+     * @dev Add stake to EntryPoint
+     */
+    function addStake(uint32 unstakeDelaySec) external payable onlyOwner {
+        (bool success,) = address(entryPoint).call{value: msg.value}(
+            abi.encodeWithSignature("addStake(uint32)", unstakeDelaySec)
+        );
+        require(success, "addStake failed");
+    }
+
+    /**
+     * @dev Deposit to EntryPoint
+     */
+    function deposit() external payable onlyOwner {
+        entryPoint.depositTo{value: msg.value}(address(this));
+    }
+
+    /**
+     * @dev Get current deposit
+     */
+    function getDeposit() external view returns (uint256) {
+        return entryPoint.balanceOf(address(this));
+    }
+
+    /**
+     * @dev Withdraw from EntryPoint
+     */
+    function withdrawTo(address payable withdrawAddress, uint256 amount) external onlyOwner {
+        (bool success,) = address(entryPoint).call(
+            abi.encodeWithSignature("withdrawTo(address,uint256)", withdrawAddress, amount)
+        );
+        require(success, "withdrawTo failed");
+    }
+
+    receive() external payable {}
 }

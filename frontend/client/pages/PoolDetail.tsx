@@ -2,16 +2,17 @@ import { useParams, Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { ArrowRight, TrendingUp, TrendingDown, DollarSign, BarChart3, Loader2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { usePools } from "@/hooks/usePools";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
+import { parseEther, formatEther } from "viem";
 
 export default function PoolDetail() {
   const { poolId } = useParams<{ poolId: string }>();
   const { pools, loading: poolsLoading, refetch: refetchPools } = usePools();
-  const { addLiquidity, removeLiquidity, swap, loading: opsLoading, isSuccess } = usePoolOperations();
+  const { addLiquidity, removeLiquidity, swap, loading: opsLoading } = usePoolOperations();
   const { refetch: refetchWallet } = useWalletData();
   const { isConnected } = useSnap();
   
@@ -21,16 +22,25 @@ export default function PoolDetail() {
   const [removeAmount, setRemoveAmount] = useState('');
   const [swapAmountIn, setSwapAmountIn] = useState('');
   const [swapTokenIn, setSwapTokenIn] = useState<'token0' | 'token1'>('token0');
+  const [txSuccess, setTxSuccess] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
   const pool = pools.find(p => p.id === poolId);
 
-  // Refresh data after successful operations
-  useEffect(() => {
-    if (isSuccess) {
+  // Helper to handle successful operations
+  const handleSuccess = (result: { hash?: string; userOpHash?: string }) => {
+    if (result?.hash) {
+      setTxHash(result.hash);
+      setTxSuccess(true);
       refetchPools();
       refetchWallet();
+      // Reset success state after a delay
+      setTimeout(() => {
+        setTxSuccess(false);
+        setTxHash(null);
+      }, 5000);
     }
-  }, [isSuccess, refetchPools, refetchWallet]);
+  };
 
   if (poolsLoading) {
     return (
@@ -71,15 +81,16 @@ export default function PoolDetail() {
       // Calculate tick range (simplified)
       const tickLower = -60;
       const tickUpper = 60;
-      const liquidityDelta = ethers.parseEther(addAmount0 || '0');
+      const liquidityDelta = parseEther(addAmount0 || '0');
 
-      await addLiquidity(
+      const result = await addLiquidity(
         pool.poolKey,
         tickLower,
         tickUpper,
         liquidityDelta
       );
 
+      handleSuccess(result);
       alert('Liquidity added successfully!');
       setAddAmount0('');
       setAddAmount1('');
@@ -97,15 +108,16 @@ export default function PoolDetail() {
     try {
       const tickLower = -60;
       const tickUpper = 60;
-      const liquidityDelta = -ethers.parseEther(removeAmount || '0');
+      const liquidityDelta = -parseEther(removeAmount || '0');
 
-      await removeLiquidity(
+      const result = await removeLiquidity(
         pool.poolKey,
         tickLower,
         tickUpper,
         liquidityDelta
       );
 
+      handleSuccess(result);
       alert('Liquidity removed successfully!');
       setRemoveAmount('');
     } catch (err: any) {
@@ -121,16 +133,17 @@ export default function PoolDetail() {
 
     try {
       const zeroForOne = swapTokenIn === 'token0';
-      const amountSpecified = ethers.parseEther(swapAmountIn || '0');
+      const amountSpecified = parseEther(swapAmountIn || '0');
       const sqrtPriceLimitX96 = 0n; // No limit
 
-      await swap(
+      const result = await swap(
         pool.poolKey,
         zeroForOne,
         amountSpecified,
         sqrtPriceLimitX96
       );
 
+      handleSuccess(result);
       alert('Swap executed successfully!');
       setSwapAmountIn('');
     } catch (err: any) {
@@ -215,7 +228,7 @@ export default function PoolDetail() {
                   <div className="p-4 border border-primary/50">
                     <p className="text-foreground/60 text-sm mb-2">LIQUIDITY</p>
                     <p className="text-foreground font-bold text-xl">
-                      {ethers.formatEther(pool.liquidity)}
+                      {formatEther(pool.liquidity)}
                     </p>
                   </div>
                   <div className="p-4 border border-primary/50">

@@ -91,10 +91,16 @@ export async function submitUserOpToBundler(userOp: any, chainId: number): Promi
 
         const result = await response.json();
 
-        console.log('%c[BUNDLER] Response:', 'color: #00ffff;', result);
+        console.log('%c[BUNDLER] Full Response:', 'color: #00ffff;', JSON.stringify(result, null, 2));
 
         if (result.error) {
             console.error('%c[BUNDLER] Bundler error:', 'color: #ff0000;', result.error);
+            // Log the full error object for debugging
+            console.error('%c[BUNDLER] Error details:', 'color: #ff0000;', {
+                code: result.error.code,
+                message: result.error.message,
+                data: result.error.data,
+            });
             throw new Error(`Bundler error: ${result.error.message || JSON.stringify(result.error)}`);
         }
 

@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useSnap } from './useSnap';
-import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { CONTRACTS } from '@shared/contracts';
 import { encodeFunctionData } from 'viem';
-import { sepolia } from 'wagmi/chains';
 
 interface PoolKey {
   currency0: string;
@@ -19,6 +18,30 @@ interface ModifyLiquidityParams {
   liquidityDelta: bigint;
   salt: `0x${string}`;
 }
+
+// ERC-20 ABI for token approvals
+const ERC20_ABI = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 interface SwapParams {
   zeroForOne: boolean;
@@ -139,16 +162,9 @@ const QUANTUM_POOL_ROUTER_ABI = [
 export function usePoolOperations() {
   const [error, setError] = useState<string | null>(null);
   const { address, isConnected } = useAccount();
-  const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-    chainId: sepolia.id,
-  });
-
   const [snapLoading, setSnapLoading] = useState(false);
-  const loading = isPending || isConfirming || snapLoading;
 
-  // Hook for Snap
+  // Hook for Snap - all operations go through quantum account
   const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction } = useSnap();
 
   const createPool = useCallback(async (
@@ -160,6 +176,10 @@ export function usePoolOperations() {
   ) => {
     if (!isConnected || !address) {
       throw new Error('Please connect MetaMask Flask first');
+    }
+
+    if (!isSnapConnected) {
+      throw new Error('Please connect your Quantum Wallet (MetaMask Snap) to create pools');
     }
 
     setError(null);
@@ -231,46 +251,44 @@ export function usePoolOperations() {
         }
       }
 
-      // Fallback to standard wagmi (likely to fail if Quantum Hook enforces it)
-      writeContract({
-        address: CONTRACTS.QUANTUM_POOL_ROUTER as `0x${string}`,
-        abi: QUANTUM_POOL_ROUTER_ABI,
-        functionName: 'initialize',
-        args: args as any,
-        chainId: sepolia.id,
-      } as any);
-
-      return { hash };
+      // Snap connection required for quantum-safe operations
+      throw new Error('Please connect your Quantum Wallet (MetaMask Snap) to create pools');
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to create pool';
       console.error('%c[POOL] ❌ Pool creation failed:', 'color: #ff0000; font-weight: bold;', errorMsg);
       setError(errorMsg);
       throw new Error(errorMsg);
     }
-  }, [isConnected, address, writeContract, hash, isSnapConnected, sendSnapTransaction]);
+  }, [isConnected, address, isSnapConnected, sendSnapTransaction]);
 
   const addLiquidity = useCallback(async (
     poolKey: PoolKey,
     tickLower: number,
     tickUpper: number,
-    liquidityDelta: bigint
+    liquidityDelta: bigint,
+    ethValue: string = '0' // ETH value for native token pools
   ) => {
     if (!isConnected || !address) {
       throw new Error('Please connect MetaMask Flask first');
     }
 
+    if (!isSnapConnected) {
+      throw new Error('Please connect your Quantum Wallet (MetaMask Snap) to add liquidity');
+    }
+
     setError(null);
+    setSnapLoading(true);
 
     try {
       const params: ModifyLiquidityParams = {
         tickLower,
         tickUpper,
         liquidityDelta,
-        salt: 0n,
+        salt: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
       };
 
-      writeContract({
-        address: CONTRACTS.QUANTUM_POOL_ROUTER as `0x${string}`,
+      // Encode calldata for QuantumPoolRouter.addLiquidity
+      const data = encodeFunctionData({
         abi: QUANTUM_POOL_ROUTER_ABI,
         functionName: 'addLiquidity',
         args: [
@@ -281,23 +299,47 @@ export function usePoolOperations() {
             tickSpacing: poolKey.tickSpacing,
             hooks: poolKey.hooks as `0x${string}`,
           },
-          {
-            tickLower: params.tickLower,
-            tickUpper: params.tickUpper,
-            liquidityDelta: params.liquidityDelta,
-            salt: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
-          },
+          params,
         ],
-        chainId: sepolia.id,
-      } as any);
+      });
 
-      return { hash };
+      console.log('%c[LIQUIDITY] Adding liquidity via quantum-safe transaction...', 'color: #00ffff; font-weight: bold;');
+      console.log('%c[LIQUIDITY] Pool Key:', 'color: #00ffff;', poolKey);
+      console.log('%c[LIQUIDITY] Tick Range:', 'color: #00ffff;', `[${tickLower}, ${tickUpper}]`);
+      console.log('%c[LIQUIDITY] Liquidity Delta:', 'color: #00ffff;', liquidityDelta.toString());
+
+      const result = await sendSnapTransaction(
+        CONTRACTS.QUANTUM_POOL_ROUTER,
+        ethValue,
+        data
+      );
+
+      if (result.error) {
+        console.error('%c[LIQUIDITY] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+        throw new Error(`Add liquidity failed: ${result.error}`);
+      }
+
+      if (!result.transactionHash) {
+        console.error('%c[LIQUIDITY] ⚠️ No transaction hash:', 'color: #ff9900;', result);
+        throw new Error('Add liquidity failed - no transaction hash received');
+      }
+
+      console.log('%c[LIQUIDITY] ✅ Liquidity added successfully!', 'color: #00ff00; font-weight: bold;');
+      console.log('%c[LIQUIDITY] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+
+      return {
+        hash: result.transactionHash as `0x${string}`,
+        userOpHash: result.userOpHash,
+      };
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to add liquidity';
+      console.error('%c[LIQUIDITY] ❌ Add liquidity failed:', 'color: #ff0000; font-weight: bold;', errorMsg);
       setError(errorMsg);
       throw new Error(errorMsg);
+    } finally {
+      setSnapLoading(false);
     }
-  }, [isConnected, address, writeContract, hash]);
+  }, [isConnected, address, isSnapConnected, sendSnapTransaction]);
 
   const removeLiquidity = useCallback(async (
     poolKey: PoolKey,
@@ -313,13 +355,19 @@ export function usePoolOperations() {
     poolKey: PoolKey,
     zeroForOne: boolean,
     amountSpecified: bigint,
-    sqrtPriceLimitX96: bigint
+    sqrtPriceLimitX96: bigint,
+    ethValue: string = '0' // ETH value for native token swaps
   ) => {
     if (!isConnected || !address) {
       throw new Error('Please connect MetaMask Flask first');
     }
 
+    if (!isSnapConnected) {
+      throw new Error('Please connect your Quantum Wallet (MetaMask Snap) to swap');
+    }
+
     setError(null);
+    setSnapLoading(true);
 
     try {
       const params: SwapParams = {
@@ -328,8 +376,8 @@ export function usePoolOperations() {
         sqrtPriceLimitX96,
       };
 
-      writeContract({
-        address: CONTRACTS.QUANTUM_POOL_ROUTER as `0x${string}`,
+      // Encode calldata for QuantumPoolRouter.swap
+      const data = encodeFunctionData({
         abi: QUANTUM_POOL_ROUTER_ABI,
         functionName: 'swap',
         args: [
@@ -340,31 +388,118 @@ export function usePoolOperations() {
             tickSpacing: poolKey.tickSpacing,
             hooks: poolKey.hooks as `0x${string}`,
           },
-          {
-            zeroForOne: params.zeroForOne,
-            amountSpecified: params.amountSpecified,
-            sqrtPriceLimitX96: params.sqrtPriceLimitX96,
-          },
+          params,
         ],
-        chainId: sepolia.id,
-      } as any);
+      });
 
-      return { hash };
+      console.log('%c[SWAP] Executing swap via quantum-safe transaction...', 'color: #ff00ff; font-weight: bold;');
+      console.log('%c[SWAP] Pool Key:', 'color: #ff00ff;', poolKey);
+      console.log('%c[SWAP] Direction:', 'color: #ff00ff;', zeroForOne ? 'token0 → token1' : 'token1 → token0');
+      console.log('%c[SWAP] Amount:', 'color: #ff00ff;', amountSpecified.toString());
+
+      const result = await sendSnapTransaction(
+        CONTRACTS.QUANTUM_POOL_ROUTER,
+        ethValue,
+        data
+      );
+
+      if (result.error) {
+        console.error('%c[SWAP] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+        throw new Error(`Swap failed: ${result.error}`);
+      }
+
+      if (!result.transactionHash) {
+        console.error('%c[SWAP] ⚠️ No transaction hash:', 'color: #ff9900;', result);
+        throw new Error('Swap failed - no transaction hash received');
+      }
+
+      console.log('%c[SWAP] ✅ Swap executed successfully!', 'color: #00ff00; font-weight: bold;');
+      console.log('%c[SWAP] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+
+      return {
+        hash: result.transactionHash as `0x${string}`,
+        userOpHash: result.userOpHash,
+      };
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to swap';
+      console.error('%c[SWAP] ❌ Swap failed:', 'color: #ff0000; font-weight: bold;', errorMsg);
       setError(errorMsg);
       throw new Error(errorMsg);
+    } finally {
+      setSnapLoading(false);
     }
-  }, [isConnected, address, writeContract, hash]);
+  }, [isConnected, address, isSnapConnected, sendSnapTransaction]);
+
+  // Approve ERC-20 token via quantum account
+  const approveToken = useCallback(async (
+    tokenAddress: string,
+    spender: string,
+    amount: bigint
+  ) => {
+    if (!isConnected || !address) {
+      throw new Error('Please connect MetaMask Flask first');
+    }
+
+    if (!isSnapConnected) {
+      throw new Error('Please connect your Quantum Wallet (MetaMask Snap) to approve tokens');
+    }
+
+    setError(null);
+    setSnapLoading(true);
+
+    try {
+      const data = encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [spender as `0x${string}`, amount],
+      });
+
+      console.log('%c[APPROVE] Approving token via quantum-safe transaction...', 'color: #ffaa00; font-weight: bold;');
+      console.log('%c[APPROVE] Token:', 'color: #ffaa00;', tokenAddress);
+      console.log('%c[APPROVE] Spender:', 'color: #ffaa00;', spender);
+      console.log('%c[APPROVE] Amount:', 'color: #ffaa00;', amount.toString());
+
+      const result = await sendSnapTransaction(
+        tokenAddress,
+        '0',
+        data
+      );
+
+      if (result.error) {
+        console.error('%c[APPROVE] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+        throw new Error(`Token approval failed: ${result.error}`);
+      }
+
+      if (!result.transactionHash) {
+        console.error('%c[APPROVE] ⚠️ No transaction hash:', 'color: #ff9900;', result);
+        throw new Error('Token approval failed - no transaction hash received');
+      }
+
+      console.log('%c[APPROVE] ✅ Token approved successfully!', 'color: #00ff00; font-weight: bold;');
+      console.log('%c[APPROVE] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+
+      return {
+        hash: result.transactionHash as `0x${string}`,
+        userOpHash: result.userOpHash,
+      };
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to approve token';
+      console.error('%c[APPROVE] ❌ Token approval failed:', 'color: #ff0000; font-weight: bold;', errorMsg);
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    } finally {
+      setSnapLoading(false);
+    }
+  }, [isConnected, address, isSnapConnected, sendSnapTransaction]);
 
   return {
     createPool,
     addLiquidity,
     removeLiquidity,
     swap,
-    loading,
+    approveToken,
+    loading: snapLoading,
     error,
-    hash,
-    isSuccess,
+    isSnapConnected,
   };
 }

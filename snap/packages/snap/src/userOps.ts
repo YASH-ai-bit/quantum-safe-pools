@@ -10,11 +10,13 @@ import {
 
 /**
  * Constants for ERC-4337
+ * IMPORTANT: Keep in sync with frontend/shared/contracts.ts
+ * Updated 2025-01-02 with correct EntryPoint!
  */
 export const ENTRYPOINT_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // v0.7 EntryPoint
-export const FACTORY_ADDRESS = '0x40ea8361529b917929FC6dcEC696791FCb48A52c'; // QuantumAccountFactory
-export const VERIFIER_ADDRESS = '0xD2e72EBC10E14097f628e04e460ED232fA2887bc'; // Groth16Verifier
-export const REGISTRY_ADDRESS = '0x25e6D39FC1888BDD36a6004a88467E8BFb38D3B2'; // QuantumRegistry
+export const FACTORY_ADDRESS = '0xFCC7CEC3273c518651Ace3131B19102ae47fdf5C'; // QuantumAccountFactory
+export const VERIFIER_ADDRESS = '0xFcB4e72630bFA360cdC1f538580699D74152B5Ab'; // Groth16Verifier
+export const REGISTRY_ADDRESS = '0xF9Ba25A15929064F2c6eE2640006b18E93924f23'; // QuantumRegistry
 
 // Default ABI coder instance
 const abiCoder = AbiCoder.defaultAbiCoder();
@@ -291,6 +293,29 @@ export async function constructUserOp(params: {
     factoryAddress,
     paymasterAddress,
   } = params;
+
+  // Validate critical addresses
+  if (!accountAddress || accountAddress === '0x' || accountAddress.length < 42) {
+    console.error('[YELLOW-SDK] Invalid accountAddress:', accountAddress);
+    throw new Error(`Invalid accountAddress: ${accountAddress}`);
+  }
+  if (!target || target === '0x' || target.length < 42) {
+    console.error('[YELLOW-SDK] Invalid target address:', target);
+    throw new Error(`Invalid target address: ${target}`);
+  }
+  if (!factoryAddress || factoryAddress === '0x' || factoryAddress.length < 42) {
+    console.error('[YELLOW-SDK] Invalid factoryAddress:', factoryAddress);
+    throw new Error(`Invalid factoryAddress: ${factoryAddress}`);
+  }
+
+  console.log('[YELLOW-SDK] constructUserOp params:', {
+    accountAddress,
+    target,
+    value: value.toString(),
+    dataLength: data?.length || 0,
+    factoryAddress,
+    paymasterAddress,
+  });
 
   // 1. Get Code to check deployment
   const code = await provider.getCode(accountAddress);

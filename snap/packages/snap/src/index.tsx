@@ -425,9 +425,29 @@ async function handleSendTransaction(origin: string, params: any) {
   const { to, value, data, factoryAddress, rpcUrl, paymasterAddress, chainId } =
     params;
 
-  if (!to || !factoryAddress || !rpcUrl || !chainId) {
-    throw new Error('to, factoryAddress, rpcUrl, and chainId are required');
+  // Validate required parameters
+  if (!to || to === '0x' || to.length < 42) {
+    throw new Error(`Invalid 'to' address: ${to}`);
   }
+  if (!factoryAddress || factoryAddress === '0x' || factoryAddress.length < 42) {
+    throw new Error(`Invalid factoryAddress: ${factoryAddress}`);
+  }
+  if (!rpcUrl) {
+    throw new Error('rpcUrl is required');
+  }
+  if (!chainId) {
+    throw new Error('chainId is required');
+  }
+
+  logYellow('handleSendTransaction called with:', {
+    to,
+    value,
+    dataLength: data?.length || 0,
+    factoryAddress,
+    rpcUrl: rpcUrl.substring(0, 30) + '...',
+    chainId,
+    paymasterAddress,
+  });
 
   await ensureKeypairExists();
 

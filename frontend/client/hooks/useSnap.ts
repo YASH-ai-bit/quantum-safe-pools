@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { RPC_URLS, CHAIN_ID, CONTRACTS } from '@shared/contracts';
-import { submitUserOpToBundler, waitForUserOpReceipt } from '../utils/bundler';
+import { useState, useEffect, useCallback } from "react";
+import { RPC_URLS, CHAIN_ID, CONTRACTS } from "@shared/contracts";
+import { submitUserOpToBundler, waitForUserOpReceipt } from "../utils/bundler";
 
-const SNAP_ID = 'local:http://localhost:8080'; // Update with deployed snap ID
-const DISCONNECTED_KEY = 'quantum_snap_disconnected'; // localStorage key
+const SNAP_ID = "local:http://localhost:8080"; // Update with deployed snap ID
+const DISCONNECTED_KEY = "quantum_snap_disconnected"; // localStorage key
 
 interface SnapState {
   isFlask: boolean;
@@ -70,7 +70,7 @@ export function useSnap() {
       try {
         // Try to call wallet_getSnaps - this method only exists in Flask
         const snaps = await provider.request({
-          method: 'wallet_getSnaps',
+          method: "wallet_getSnaps",
         });
 
         // If we get here, Flask is installed
@@ -101,14 +101,14 @@ export function useSnap() {
 
     const provider = getFlaskProvider();
     if (provider) {
-      provider.on('accountsChanged', handleAccountsChanged);
+      provider.on("accountsChanged", handleAccountsChanged);
     }
 
     return () => {
       mounted = false;
       clearTimeout(accountsChangedTimeout);
       if (provider) {
-        provider.removeListener('accountsChanged', handleAccountsChanged);
+        provider.removeListener("accountsChanged", handleAccountsChanged);
       }
     };
   }, []);
@@ -120,19 +120,19 @@ export function useSnap() {
       if (!provider) return;
 
       const snaps = await provider.request({
-        method: 'wallet_getSnaps',
+        method: "wallet_getSnaps",
       });
 
       const isInstalled = !!snaps[SNAP_ID];
 
       // Check if user has explicitly disconnected
-      const isDisconnected = localStorage.getItem(DISCONNECTED_KEY) === 'true';
+      const isDisconnected = localStorage.getItem(DISCONNECTED_KEY) === "true";
 
       setSnapState((prev) => ({
         ...prev,
         isInstalled,
         // Only auto-connect if snap is installed AND user hasn't disconnected
-        isConnected: isInstalled && !isDisconnected
+        isConnected: isInstalled && !isDisconnected,
       }));
 
       // Only load data if connected (not disconnected)
@@ -148,7 +148,7 @@ export function useSnap() {
   const connectSnap = useCallback(async () => {
     const provider = getFlaskProvider();
     if (!provider || !snapState.isFlask) {
-      setError('Please install MetaMask Flask');
+      setError("Please install MetaMask Flask");
       return false;
     }
 
@@ -157,7 +157,7 @@ export function useSnap() {
 
     try {
       await provider.request({
-        method: 'wallet_requestSnaps',
+        method: "wallet_requestSnaps",
         params: {
           [SNAP_ID]: {},
         },
@@ -172,13 +172,13 @@ export function useSnap() {
       setSnapState((prev) => ({
         ...prev,
         isInstalled: true,
-        isConnected: true
+        isConnected: true,
       }));
 
       setLoading(false);
       return true;
     } catch (err: any) {
-      setError(err?.message || 'Failed to connect snap');
+      setError(err?.message || "Failed to connect snap");
       setLoading(false);
       return false;
     }
@@ -188,14 +188,14 @@ export function useSnap() {
   const initializeSnap = async () => {
     try {
       const provider = getFlaskProvider();
-      if (!provider) throw new Error('Flask provider not found');
+      if (!provider) throw new Error("Flask provider not found");
 
       await provider.request({
-        method: 'wallet_invokeSnap',
+        method: "wallet_invokeSnap",
         params: {
           snapId: SNAP_ID,
           request: {
-            method: 'quantum_initialize',
+            method: "quantum_initialize",
           },
         },
       });
@@ -211,11 +211,11 @@ export function useSnap() {
       if (!provider) return;
 
       const publicKeyData = await provider.request({
-        method: 'wallet_invokeSnap',
+        method: "wallet_invokeSnap",
         params: {
           snapId: SNAP_ID,
           request: {
-            method: 'quantum_getPublicKey',
+            method: "quantum_getPublicKey",
           },
         },
       });
@@ -224,11 +224,11 @@ export function useSnap() {
       let accountAddress = null;
       try {
         const accountData = await provider.request({
-          method: 'wallet_invokeSnap',
+          method: "wallet_invokeSnap",
           params: {
             snapId: SNAP_ID,
             request: {
-              method: 'quantum_getAccountAddress',
+              method: "quantum_getAccountAddress",
               params: {
                 factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
                 rpcUrl: RPC_URLS.SEPOLIA,
@@ -239,7 +239,7 @@ export function useSnap() {
 
         // Validate address
         const addr = accountData?.address || accountData?.accountAddress;
-        if (addr && addr !== '0x' && addr.length >= 42) {
+        if (addr && addr !== "0x" && addr.length >= 42) {
           accountAddress = addr;
         }
       } catch (err) {
@@ -247,8 +247,10 @@ export function useSnap() {
       }
 
       // Parse public key data
-      const publicKey = publicKeyData?.publicKey?.hex || publicKeyData?.publicKey;
-      const publicKeyHash = publicKeyData?.publicKey?.hash || publicKeyData?.publicKeyHash;
+      const publicKey =
+        publicKeyData?.publicKey?.hex || publicKeyData?.publicKey;
+      const publicKeyHash =
+        publicKeyData?.publicKey?.hash || publicKeyData?.publicKeyHash;
 
       setSnapState((prev) => ({
         ...prev,
@@ -257,26 +259,26 @@ export function useSnap() {
         accountAddress: accountAddress,
       }));
     } catch (err) {
-      console.error('Error loading snap data:', err);
+      console.error("Error loading snap data:", err);
     }
   };
 
   // Sign a message with quantum key
   const signMessage = async (message: string) => {
     if (!snapState.isConnected) {
-      throw new Error('Snap not connected');
+      throw new Error("Snap not connected");
     }
 
     const provider = getFlaskProvider();
-    if (!provider) throw new Error('Flask provider not found');
+    if (!provider) throw new Error("Flask provider not found");
 
     try {
       const signature = await provider.request({
-        method: 'wallet_invokeSnap',
+        method: "wallet_invokeSnap",
         params: {
           snapId: SNAP_ID,
           request: {
-            method: 'quantum_signMessage',
+            method: "quantum_signMessage",
             params: { message },
           },
         },
@@ -291,21 +293,24 @@ export function useSnap() {
   // Send a quantum-safe transaction
   const sendTransaction = async (to: string, value: string, data: string) => {
     if (!snapState.isConnected) {
-      throw new Error('Snap not connected');
+      throw new Error("Snap not connected");
     }
 
     const provider = getFlaskProvider();
-    if (!provider) throw new Error('Flask provider not found');
+    if (!provider) throw new Error("Flask provider not found");
 
     try {
-      console.log('%c[SNAP] Sending quantum-safe transaction...', 'color: #00ff00; font-weight: bold;');
+      console.log(
+        "%c[SNAP] Sending quantum-safe transaction...",
+        "color: #00ff00; font-weight: bold;",
+      );
 
       const result: any = await provider.request({
-        method: 'wallet_invokeSnap',
+        method: "wallet_invokeSnap",
         params: {
           snapId: SNAP_ID,
           request: {
-            method: 'quantum_sendTransaction',
+            method: "quantum_sendTransaction",
             params: {
               to,
               value,
@@ -321,32 +326,70 @@ export function useSnap() {
 
       // Display snap logs in browser console with yellow styling
       if (result?.logs && Array.isArray(result.logs)) {
-        console.log('%c========== SNAP LOGS ==========', 'color: #ffff00; font-weight: bold; font-size: 14px;');
+        console.log(
+          "%c========== SNAP LOGS ==========",
+          "color: #ffff00; font-weight: bold; font-size: 14px;",
+        );
         result.logs.forEach((log: string) => {
-          console.log(`%c${log}`, 'color: #ffff00;');
+          console.log(`%c${log}`, "color: #ffff00;");
         });
-        console.log('%c===============================', 'color: #ffff00; font-weight: bold; font-size: 14px;');
+        console.log(
+          "%c===============================",
+          "color: #ffff00; font-weight: bold; font-size: 14px;",
+        );
       }
 
       // Check if snap already handled bundler submission (has transactionHash)
       if (result.transactionHash) {
-        console.log('%c[SNAP] ✅ Transaction confirmed by snap!', 'color: #00ff00; font-weight: bold;');
-        console.log('%c[SNAP] Transaction hash:', 'color: #00ff00;', result.transactionHash);
+        console.log(
+          "%c[SNAP] ✅ Transaction confirmed by snap!",
+          "color: #00ff00; font-weight: bold;",
+        );
+        console.log(
+          "%c[SNAP] Transaction hash:",
+          "color: #00ff00;",
+          result.transactionHash,
+        );
         return result;
       }
 
+      // Check for error first (snap already tried bundler and failed)
+      if (result.error) {
+        console.error('%c[SNAP] ❌ Snap returned error:', 'color: #ff0000; font-weight: bold;', result.error);
+        throw new Error(result.error);
+      }
+
       // Snap returned signed UserOp, submit to bundler from frontend
-      if (result.userOp) {
-        console.log('%c[SNAP] UserOp signed, submitting to bundler from frontend...', 'color: #00ff00; font-weight: bold;');
+      if (result.userOp && !result.transactionHash) {
+        console.log(
+          "%c[SNAP] UserOp signed, submitting to bundler from frontend...",
+          "color: #00ff00; font-weight: bold;",
+        );
 
-        const userOpHash = await submitUserOpToBundler(result.userOp, CHAIN_ID.SEPOLIA);
+        const userOpHash = await submitUserOpToBundler(
+          result.userOp,
+          CHAIN_ID.SEPOLIA,
+        );
 
-        console.log('%c[SNAP] Waiting for transaction to be mined...', 'color: #00ff00; font-weight: bold;');
+        console.log(
+          "%c[SNAP] Waiting for transaction to be mined...",
+          "color: #00ff00; font-weight: bold;",
+        );
 
-        const receipt = await waitForUserOpReceipt(userOpHash, CHAIN_ID.SEPOLIA);
+        const receipt = await waitForUserOpReceipt(
+          userOpHash,
+          CHAIN_ID.SEPOLIA,
+        );
 
-        console.log('%c[SNAP] ✅ Transaction confirmed!', 'color: #00ff00; font-weight: bold;');
-        console.log('%c[SNAP] Transaction hash:', 'color: #00ff00;', receipt.receipt.transactionHash);
+        console.log(
+          "%c[SNAP] ✅ Transaction confirmed!",
+          "color: #00ff00; font-weight: bold;",
+        );
+        console.log(
+          "%c[SNAP] Transaction hash:",
+          "color: #00ff00;",
+          receipt.receipt.transactionHash,
+        );
 
         return {
           ...result,
@@ -356,14 +399,16 @@ export function useSnap() {
         };
       }
 
-      // Error case
-      if (result.error) {
-        throw new Error(`Transaction failed: ${result.error}`);
-      }
+      // Unexpected response
+      if (!result.transactionHash) {
 
-      throw new Error('Unexpected response from snap');
+      throw new Error("Unexpected response from snap");
     } catch (err) {
-      console.error('%c[SNAP] ❌ Transaction failed:', 'color: #ff0000; font-weight: bold;', err);
+      console.error(
+        "%c[SNAP] ❌ Transaction failed:",
+        "color: #ff0000; font-weight: bold;",
+        err,
+      );
       throw err;
     }
   };
@@ -371,7 +416,7 @@ export function useSnap() {
   // Disconnect snap (clear state)
   const disconnectSnap = useCallback(() => {
     // Set disconnected flag to prevent auto-reconnection on page reload
-    localStorage.setItem(DISCONNECTED_KEY, 'true');
+    localStorage.setItem(DISCONNECTED_KEY, "true");
 
     setSnapState({
       isFlask: snapState.isFlask,
