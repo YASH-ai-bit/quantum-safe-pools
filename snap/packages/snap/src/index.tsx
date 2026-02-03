@@ -21,6 +21,7 @@ import {
   constructUserOp,
   getUserOpHash,
   calculateAccountAddress,
+  getAccountNonce,
   isAccountDeployed,
   isRegistered,
   REGISTRY_ADDRESS,
@@ -513,7 +514,24 @@ async function handleSendTransaction(origin: string, params: any) {
 
   // Check if account is deployed and registered
   await isAccountDeployed(accountAddress, provider); // Just to warm up cache if needed
-  const isSafe = await isRegistered(accountAddress, provider);
+
+  // CRITICAL FIX: RPC Lag Prevention
+  // Fetch pending nonce. If > 0, account exists and has likely interacted.
+  // We assume it's registered to avoid batching "register" call again, which causes AA25 errors.
+  let isSafe = false;
+  try {
+    // @ts-ignore - getAccountNonce updated to accept blockTag
+    const pendingNonce = await getAccountNonce(accountAddress, provider, 'pending');
+    if (pendingNonce > 0n) {
+      logYellow('Account has pending nonce > 0. Assuming registered.', { nonce: pendingNonce.toString() });
+      isSafe = true;
+    } else {
+      isSafe = await isRegistered(accountAddress, provider);
+    }
+  } catch (err) {
+    console.warn('Error checking nonce/registry:', err);
+    isSafe = await isRegistered(accountAddress, provider);
+  }
 
   let useBatch = false;
   let batchCallData = '0x';

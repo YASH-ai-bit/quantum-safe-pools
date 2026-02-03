@@ -4,9 +4,24 @@ import {
   Interface,
   Contract,
   parseUnits,
-  concat,
   type Provider,
 } from 'ethers';
+
+/**
+ * Helper to concatenate hex strings
+ * Behaves like ethers.concat but works reliably in Snap environment
+ */
+export function hexConcat(items: string[]): string {
+  let result = '0x';
+  for (const item of items) {
+    if (item.startsWith('0x')) {
+      result += item.slice(2);
+    } else {
+      result += item;
+    }
+  }
+  return result;
+}
 
 /**
  * Constants for ERC-4337
@@ -112,7 +127,7 @@ export function encodeInitCode(
     salt,
   ]);
 
-  return concat([factoryAddress, callData]);
+  return hexConcat([factoryAddress, callData]);
 }
 
 /**
@@ -145,16 +160,32 @@ export function packGasFees(
 export async function getAccountNonce(
   accountAddress: string,
   provider: Provider,
+  blockTag: string = 'latest'
 ): Promise<bigint> {
-  const entryPoint = new Contract(
-    ENTRYPOINT_ADDRESS,
-    ['function getNonce(address sender, uint192 key) view returns (uint256)'],
-    provider,
-  );
+  const nonceCallData =
+    '0x7ecebe00' +
+    accountAddress.slice(2).padStart(64, '0') +
+    '0'.padStart(64, '0'); // key = 0
 
   try {
-    return await entryPoint.getNonce(accountAddress, 0);
-  } catch (_error) {
+    const result = await provider.call({
+      to: ENTRYPOINT_ADDRESS,
+      data: nonceCallData,
+    }, blockTag);
+    return BigInt(result);
+  } catch (error) {
+    if (blockTag === 'pending') {
+      // Fallback to latest if pending fails
+      try {
+        const result = await provider.call({
+          to: ENTRYPOINT_ADDRESS,
+          data: nonceCallData,
+        }, 'latest');
+        return BigInt(result);
+      } catch (e) {
+        return 0n;
+      }
+    }
     return 0n;
   }
 }
@@ -426,22 +457,44 @@ export async function constructUserOp(params: {
 
   let nonce = 0n;
   try {
+    // Try to fetch from 'pending' first to get the absolute latest nonce including mempool
     const nonceResult = await provider.call({
       to: ENTRYPOINT_ADDRESS,
       data: nonceCallData,
-    });
+    }, 'pending');
     nonce = BigInt(nonceResult);
     console.log(
-      '[YELLOW-SDK] Fetched nonce from EntryPoint:',
+      '[YELLOW-SDK] Fetched nonce from EntryPoint (pending):',
       nonce.toString(),
     );
   } catch (err) {
-    console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0:', err);
+    try {
+      // Fallback to latest
+      const nonceResult = await provider.call({
+        to: ENTRYPOINT_ADDRESS,
+        data: nonceCallData,
+      }, 'latest');
+      nonce = BigInt(nonceResult);
+      console.log(
+        '[YELLOW-SDK] Fetched nonce from EntryPoint (latest):',
+        nonce.toString(),
+      );
+    } catch (err2) {
+      console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0:', err2);
+    }
+  }
+
+  // CRITICAL FIX: If nonce > 0, account IS deployed (or at least used), so we must NOT send initCode.
+  // This prevents AA25 invalid account nonce errors where we send initCode with nonce > 0.
+  let finalIsDeployed = isDeployed;
+  if (nonce > 0n) {
+    console.log('[YELLOW-SDK] Nonce > 0, treating account as DEPLOYED (skipping initCode).');
+    finalIsDeployed = true;
   }
 
   // 3. Generate initCode (for PACKED structure)
   let initCode = '0x';
-  if (!isDeployed) {
+  if (!finalIsDeployed) {
     initCode = encodeInitCode(publicKeyHash, salt, factoryAddress);
     console.log('[YELLOW-SDK] Generated initCode for deployment');
   }
@@ -452,17 +505,18 @@ export async function constructUserOp(params: {
     const accountInterface = new Interface([
       'function execute(address dest, uint256 value, bytes calldata func)',
     ]);
+    // Normalizing data to Uint8Array to avoid potential type issues in Snap environment
     callData = accountInterface.encodeFunctionData('execute', [
       target,
       value,
-      data,
+      getBytes(data),
     ]);
   }
 
   // 5. Gas Estimation - use provided Pimlico gas prices if available
   let maxFeePerGas: bigint;
   let maxPriorityFeePerGas: bigint;
-  
+
   if (gasPrices) {
     maxFeePerGas = gasPrices.maxFeePerGas;
     maxPriorityFeePerGas = gasPrices.maxPriorityFeePerGas;
