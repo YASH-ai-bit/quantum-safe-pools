@@ -4,6 +4,7 @@ import {
   Interface,
   Contract,
   parseUnits,
+  getBytes,
   type Provider,
 } from 'ethers';
 
@@ -449,10 +450,10 @@ export async function constructUserOp(params: {
   });
 
   // 2. Get Nonce from EntryPoint
-  // 0x7ecebe00 = getNonce(address,uint192)
+  // 0x35567e1a = getNonce(address,uint192) - v0.7 EntryPoint
   const nonceCallData =
-    '0x7ecebe00' +
-    accountAddress.slice(2).padStart(64, '0') +
+    '0x35567e1a' +
+    accountAddress.slice(2).toLowerCase().padStart(64, '0') +
     '0'.padStart(64, '0'); // key = 0
 
   let nonce = 0n;
