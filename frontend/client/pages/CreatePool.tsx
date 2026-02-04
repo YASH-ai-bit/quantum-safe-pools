@@ -15,6 +15,7 @@ import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
 import { useSnap } from "@/hooks/useSnap";
 import { parseUnits } from "viem";
+import { CONTRACTS } from "@shared/contracts";
 
 // Common token addresses on Sepolia - these should ideally be fetched from a token registry
 const TOKEN_ADDRESSES: Record<string, string> = {
@@ -38,7 +39,8 @@ export default function CreatePool() {
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const navigate = useNavigate();
-  const { createPool, approveToken, addLiquidity, loading } = usePoolOperations();
+  const { createPool, approveToken, addLiquidity, loading } =
+    usePoolOperations();
   const { refetch: refetchWallet } = useWalletData();
   const { refetch: refetchPools } = usePools();
   const { isConnected } = useSnap();
@@ -125,15 +127,11 @@ export default function CreatePool() {
       const feeBps = Math.round(parseFloat(fee) * 100);
       const tickSpacing = 60; // Standard tick spacing
 
-      console.log(
-        "%c[CREATE_POOL] Fee (bps):",
-        "color: #00ffff;",
-        feeBps
-      );
+      console.log("%c[CREATE_POOL] Fee (bps):", "color: #00ffff;", feeBps);
       console.log(
         "%c[CREATE_POOL] Tick spacing:",
         "color: #00ffff;",
-        tickSpacing
+        tickSpacing,
       );
 
       // 1. Create Pool (Initialize)
@@ -142,15 +140,19 @@ export default function CreatePool() {
         tokenBObj.address,
         feeBps,
         tickSpacing,
-        initialPrice
+        initialPrice,
       );
 
       if (result?.hash) {
-        console.log("%c[CREATE_POOL] Pool initialized! Hash:", "color: #00ff00;", result.hash);
+        console.log(
+          "%c[CREATE_POOL] Pool initialized! Hash:",
+          "color: #00ff00;",
+          result.hash,
+        );
 
         // Wait for RPC synchronization (Nonce increment propagation)
         console.log("Waiting for RPC sync...");
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise((r) => setTimeout(r, 5000));
 
         // 2. Prepare for Adding Liquidity
         const parsedAmountA = parseUnits(amountA, 18); // Assuming 18 decimals for now
@@ -167,12 +169,12 @@ export default function CreatePool() {
         if (!isTokenA_ETH) {
           await approveToken(tokenAObj.address, ROUTER_ADDRESS, parsedAmountA);
           console.log("Waiting for RPC sync...");
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise((r) => setTimeout(r, 5000));
         }
         if (!isTokenB_ETH) {
           await approveToken(tokenBObj.address, ROUTER_ADDRESS, parsedAmountB);
           console.log("Waiting for RPC sync...");
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise((r) => setTimeout(r, 5000));
         }
 
         // 4. Add Liquidity
@@ -191,18 +193,27 @@ export default function CreatePool() {
         if (isTokenA_ETH) ethValue = parsedAmountA.toString();
         if (isTokenB_ETH) ethValue = parsedAmountB.toString();
 
+        // Use dynamic fee (0x800000) to match the pool created by createPool
+        const dynamicFee = 0x800000;
+
+        // Sort addresses to match Uniswap V4 requirement (currency0 < currency1)
+        const [sortedCurrency0, sortedCurrency1] =
+          tokenAObj.address.toLowerCase() < tokenBObj.address.toLowerCase()
+            ? [tokenAObj.address, tokenBObj.address]
+            : [tokenBObj.address, tokenAObj.address];
+
         const liquidityResult = await addLiquidity(
           {
-            currency0: tokenAObj.address,
-            currency1: tokenBObj.address,
-            fee: feeBps,
+            currency0: sortedCurrency0,
+            currency1: sortedCurrency1,
+            fee: dynamicFee,
             tickSpacing: tickSpacing,
-            hooks: "0x201703B5f4e0cCfDa863bB81937703cEd2381E9e" // Hardcoded hook per logs/contracts
+            hooks: CONTRACTS.QUANTUM_HOOK,
           },
           tickLower,
           tickUpper,
           liquidityDelta,
-          ethValue
+          ethValue,
         );
 
         // Set success state with FINAL transaction hash (liquidity addition)
@@ -252,17 +263,19 @@ export default function CreatePool() {
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${s <= step
-                    ? "bg-primary text-black border-primary"
-                    : "bg-black border-primary/30 text-foreground/60"
-                    }`}
+                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${
+                    s <= step
+                      ? "bg-primary text-black border-primary"
+                      : "bg-black border-primary/30 text-foreground/60"
+                  }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`h-1 w-12 transition-all ${s < step ? "bg-primary" : "bg-primary/30"
-                      }`}
+                    className={`h-1 w-12 transition-all ${
+                      s < step ? "bg-primary" : "bg-primary/30"
+                    }`}
                   />
                 )}
               </div>

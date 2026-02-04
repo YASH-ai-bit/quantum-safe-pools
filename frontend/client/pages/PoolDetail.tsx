@@ -29,7 +29,60 @@ export default function PoolDetail() {
   const { refetch: refetchWallet } = useWalletData();
   const { isConnected } = useSnap();
 
-  // ... (activeTab state) ...
+  // Find the pool from the pools array
+  const pool = pools.find((p) => p.id === poolId);
+
+  // State for forms
+  const [activeTab, setActiveTab] = useState<"add" | "remove" | "swap">("add");
+  const [addAmount0, setAddAmount0] = useState("");
+  const [addAmount1, setAddAmount1] = useState("");
+  const [removeAmount, setRemoveAmount] = useState("");
+  const [swapAmountIn, setSwapAmountIn] = useState("");
+  const [swapTokenIn, setSwapTokenIn] = useState<"token0" | "token1">("token0");
+
+  const handleSuccess = (result: any) => {
+    refetchPools();
+    refetchWallet();
+  };
+
+  // Show loading state
+  if (poolsLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-black">
+        <Header />
+        <main className="flex-1 pt-20 pb-20 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Show not found if pool doesn't exist
+  if (!pool) {
+    return (
+      <div className="min-h-screen flex flex-col bg-black">
+        <Header />
+        <main className="flex-1 pt-20 pb-20 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto text-center">
+            <h1 className="text-4xl font-bold mb-4 pixel-text text-foreground">
+              POOL_NOT_FOUND
+            </h1>
+            <p className="text-foreground/60 mb-8">
+              The requested pool does not exist.
+            </p>
+            <Link
+              to="/pools"
+              className="text-primary hover:text-primary/80 pixel-text"
+            >
+              &lt; back_to_pools
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   const handleAddLiquidity = async () => {
     if (!isConnected) {
@@ -44,10 +97,18 @@ export default function PoolDetail() {
       const amount0Wei = parseEther(addAmount0 || "0");
       const amount1Wei = parseEther(addAmount1 || "0");
 
-      if (pool.poolKey.currency0 !== "0x0000000000000000000000000000000000000000" && amount0Wei > 0n) {
+      if (
+        pool.poolKey.currency0 !==
+          "0x0000000000000000000000000000000000000000" &&
+        amount0Wei > 0n
+      ) {
         await approveToken(pool.poolKey.currency0, ROUTER_ADDRESS, amount0Wei);
       }
-      if (pool.poolKey.currency1 !== "0x0000000000000000000000000000000000000000" && amount1Wei > 0n) {
+      if (
+        pool.poolKey.currency1 !==
+          "0x0000000000000000000000000000000000000000" &&
+        amount1Wei > 0n
+      ) {
         await approveToken(pool.poolKey.currency1, ROUTER_ADDRESS, amount1Wei);
       }
 
@@ -61,15 +122,21 @@ export default function PoolDetail() {
 
       // Calculate ETH Value
       let ethValue = "0";
-      if (pool.poolKey.currency0 === "0x0000000000000000000000000000000000000000") ethValue = amount0Wei.toString();
-      if (pool.poolKey.currency1 === "0x0000000000000000000000000000000000000000") ethValue = amount1Wei.toString();
+      if (
+        pool.poolKey.currency0 === "0x0000000000000000000000000000000000000000"
+      )
+        ethValue = amount0Wei.toString();
+      if (
+        pool.poolKey.currency1 === "0x0000000000000000000000000000000000000000"
+      )
+        ethValue = amount1Wei.toString();
 
       const result = await addLiquidity(
         pool.poolKey,
         tickLower,
         tickUpper,
         liquidityDelta,
-        ethValue
+        ethValue,
       );
 
       handleSuccess(result);
@@ -122,10 +189,15 @@ export default function PoolDetail() {
       const sqrtPriceLimitX96 = 0n; // No limit
 
       // 1. Approve Token In
-      const tokenIn = zeroForOne ? pool.poolKey.currency0 : pool.poolKey.currency1;
+      const tokenIn = zeroForOne
+        ? pool.poolKey.currency0
+        : pool.poolKey.currency1;
 
       // Only approve if not ETH
-      if (tokenIn !== "0x0000000000000000000000000000000000000000" && amountSpecified > 0n) {
+      if (
+        tokenIn !== "0x0000000000000000000000000000000000000000" &&
+        amountSpecified > 0n
+      ) {
         await approveToken(tokenIn, ROUTER_ADDRESS, amountSpecified);
       }
 
@@ -140,7 +212,7 @@ export default function PoolDetail() {
         zeroForOne,
         amountSpecified,
         sqrtPriceLimitX96,
-        ethValue
+        ethValue,
       );
 
       handleSuccess(result);
@@ -219,10 +291,11 @@ export default function PoolDetail() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-3 border-b-2 transition pixel-text font-bold ${activeTab === tab
+                className={`px-6 py-3 border-b-2 transition pixel-text font-bold ${
+                  activeTab === tab
                     ? "border-primary text-primary"
                     : "border-transparent text-foreground/60 hover:text-foreground"
-                  }`}
+                }`}
               >
                 {tab.toUpperCase()}
               </button>
