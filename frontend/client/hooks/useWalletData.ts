@@ -91,9 +91,13 @@ const SEPOLIA_PYUSD = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9';
 const SEPOLIA_LINK = '0x779877A7B0D9E8603169DdbD7836e478b4624789';
 
 export function useWalletData() {
-  const { address, isConnected: wagmiConnected } = useAccount();
-  const { isConnected: snapConnected } = useSnap();
+  const { address: eoaAddress, isConnected: wagmiConnected } = useAccount();
+  const { isConnected: snapConnected, accountAddress: quantumAccountAddress } = useSnap();
   const isConnected = snapConnected || wagmiConnected;
+
+  // Use the QuantumAccount address for balance queries (this is where funds need to be)
+  // Falls back to EOA if QuantumAccount not available yet
+  const address = quantumAccountAddress as `0x${string}` | undefined || eoaAddress;
 
   const { pools } = usePools();
 

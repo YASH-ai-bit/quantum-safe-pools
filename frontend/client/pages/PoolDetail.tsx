@@ -8,13 +8,32 @@ import {
   DollarSign,
   BarChart3,
   Loader2,
+  Wallet,
+  AlertCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { usePools } from "@/hooks/usePools";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
-import { parseEther, formatEther } from "viem";
+import { parseUnits, formatEther } from "viem";
+
+// Token decimals mapping (common tokens)
+const TOKEN_DECIMALS: Record<string, number> = {
+  ETH: 18,
+  WETH: 18,
+  USDC: 6,
+  USDT: 6,
+  DAI: 18,
+  PYUSD: 6,
+  LINK: 18,
+};
+
+// Get decimals for a token symbol
+const getTokenDecimals = (symbol: string | undefined): number => {
+  if (!symbol) return 18;
+  return TOKEN_DECIMALS[symbol.toUpperCase()] ?? 18;
+};
 
 export default function PoolDetail() {
   const { poolId } = useParams<{ poolId: string }>();
@@ -26,21 +45,70 @@ export default function PoolDetail() {
     approveToken, // Added approveToken
     loading: opsLoading,
   } = usePoolOperations();
-  const { refetch: refetchWallet } = useWalletData();
-  const { isConnected } = useSnap();
+  const { refetch: refetchWallet, tokenBalances } = useWalletData();
+  const { isConnected, accountAddress } = useSnap();
 
   // Find the pool from the pools array
   const pool = pools.find((p) => p.id === poolId);
 
   // State for forms
-  const [activeTab, setActiveTab] = useState<"add" | "remove" | "swap">("add");
+  const [activeTab, setActiveTab] = useState<"add" | "remove" | "swap" | "overview">("add");
   const [addAmount0, setAddAmount0] = useState("");
   const [addAmount1, setAddAmount1] = useState("");
   const [removeAmount, setRemoveAmount] = useState("");
   const [swapAmountIn, setSwapAmountIn] = useState("");
   const [swapTokenIn, setSwapTokenIn] = useState<"token0" | "token1">("token0");
+  const [error, setError] = useState<string | null>(null);
+
+  // Helper to get token balance from wallet data
+  const getTokenBalance = (symbol: string): number => {
+    const token = tokenBalances.find((t) => t.symbol === symbol);
+    if (!token) return 0;
+    return parseFloat(token.amount) || 0;
+  };
+
+  // Validate balances for add liquidity
+  const addLiquidityValidation = useMemo(() => {
+    if (!pool || !addAmount0 || !addAmount1) {
+      return { isValid: true, errors: [] };
+    }
+
+    const errors: string[] = [];
+    const balance0 = getTokenBalance(pool.token0Symbol || "");
+    const balance1 = getTokenBalance(pool.token1Symbol || "");
+    const required0 = parseFloat(addAmount0) || 0;
+    const required1 = parseFloat(addAmount1) || 0;
+
+    if (required0 > 0 && balance0 < required0) {
+      errors.push(`Insufficient ${pool.token0Symbol} balance. You have ${balance0.toFixed(4)} but need ${required0}`);
+    }
+    if (required1 > 0 && balance1 < required1) {
+      errors.push(`Insufficient ${pool.token1Symbol} balance. You have ${balance1.toFixed(4)} but need ${required1}`);
+    }
+
+    return { isValid: errors.length === 0, errors };
+  }, [pool, addAmount0, addAmount1, tokenBalances]);
+
+  // Validate balances for swap
+  const swapValidation = useMemo(() => {
+    if (!pool || !swapAmountIn) {
+      return { isValid: true, errors: [] };
+    }
+
+    const errors: string[] = [];
+    const tokenSymbol = swapTokenIn === "token0" ? pool.token0Symbol : pool.token1Symbol;
+    const balance = getTokenBalance(tokenSymbol || "");
+    const required = parseFloat(swapAmountIn) || 0;
+
+    if (required > 0 && balance < required) {
+      errors.push(`Insufficient ${tokenSymbol} balance. You have ${balance.toFixed(4)} but need ${required}`);
+    }
+
+    return { isValid: errors.length === 0, errors };
+  }, [pool, swapAmountIn, swapTokenIn, tokenBalances]);
 
   const handleSuccess = (result: any) => {
+    setError(null);
     refetchPools();
     refetchWallet();
   };
@@ -86,17 +154,36 @@ export default function PoolDetail() {
 
   const handleAddLiquidity = async () => {
     if (!isConnected) {
-      alert("Please connect MetaMask Flask first");
+      setError("Please connect MetaMask Flask first");
       return;
     }
+
+    // Validate balances before proceeding
+    if (!addLiquidityValidation.isValid) {
+      setError(addLiquidityValidation.errors.join(". ") + `. Send tokens to your Quantum Account: ${accountAddress}`);
+      return;
+    }
+
+    setError(null);
 
     try {
       const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter
 
-      // 1. Approve Tokens
-      const amount0Wei = parseEther(addAmount0 || "0");
-      const amount1Wei = parseEther(addAmount1 || "0");
+      // Get token decimals
+      const decimals0 = getTokenDecimals(pool.token0Symbol);
+      const decimals1 = getTokenDecimals(pool.token1Symbol);
 
+      console.log("[LIQUIDITY] Token0:", pool.token0Symbol, "decimals:", decimals0);
+      console.log("[LIQUIDITY] Token1:", pool.token1Symbol, "decimals:", decimals1);
+
+      // Parse amounts with correct decimals
+      const amount0Wei = parseUnits(addAmount0 || "0", decimals0);
+      const amount1Wei = parseUnits(addAmount1 || "0", decimals1);
+
+      console.log("[LIQUIDITY] Amount0 (wei):", amount0Wei.toString());
+      console.log("[LIQUIDITY] Amount1 (wei):", amount1Wei.toString());
+
+      // 1. Approve Tokens (skip for native ETH which is address(0))
       if (
         pool.poolKey.currency0 !==
           "0x0000000000000000000000000000000000000000" &&
@@ -117,8 +204,10 @@ export default function PoolDetail() {
       const tickLower = -887220;
       const tickUpper = 887220;
 
-      // Approximation: Use amount0 as liquidityDelta proxy for demo
-      const liquidityDelta = amount0Wei;
+      // For liquidity delta, we use the ETH amount (token0) since it's 18 decimals
+      // Uniswap V4 liquidity is based on sqrt(amount0 * amount1)
+      // For simplicity, use the 18-decimal amount as a proxy
+      const liquidityDelta = decimals0 === 18 ? amount0Wei : amount1Wei;
 
       // Calculate ETH Value
       let ethValue = "0";
@@ -158,7 +247,8 @@ export default function PoolDetail() {
     try {
       const tickLower = -887220;
       const tickUpper = 887220;
-      const liquidityDelta = parseEther(removeAmount || "0"); // Helper handles negation
+      // For remove liquidity, use 18 decimals (liquidity is in 18 decimal units)
+      const liquidityDelta = parseUnits(removeAmount || "0", 18); // Helper handles negation
 
       const result = await removeLiquidity(
         pool.poolKey,
@@ -177,16 +267,33 @@ export default function PoolDetail() {
 
   const handleSwap = async () => {
     if (!isConnected) {
-      alert("Please connect MetaMask Flask first");
+      setError("Please connect MetaMask Flask first");
       return;
     }
+
+    // Validate balances before proceeding
+    if (!swapValidation.isValid) {
+      setError(swapValidation.errors.join(". ") + `. Send tokens to your Quantum Account: ${accountAddress}`);
+      return;
+    }
+
+    setError(null);
 
     try {
       const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter
 
       const zeroForOne = swapTokenIn === "token0";
-      const amountSpecified = parseEther(swapAmountIn || "0");
+      
+      // Get correct decimals for the input token
+      const tokenInSymbol = zeroForOne ? pool.token0Symbol : pool.token1Symbol;
+      const decimalsIn = getTokenDecimals(tokenInSymbol);
+      
+      console.log("[SWAP] Token in:", tokenInSymbol, "decimals:", decimalsIn);
+      
+      const amountSpecified = parseUnits(swapAmountIn || "0", decimalsIn);
       const sqrtPriceLimitX96 = 0n; // No limit
+
+      console.log("[SWAP] Amount (wei):", amountSpecified.toString());
 
       // 1. Approve Token In
       const tokenIn = zeroForOne
@@ -350,10 +457,42 @@ export default function PoolDetail() {
                 <h2 className="text-2xl font-bold text-foreground mb-4">
                   ADD_LIQUIDITY
                 </h2>
+
+                {/* Error Display */}
+                {error && (
+                  <div className="p-4 border-2 border-red-500 bg-red-500/10">
+                    <div className="flex items-center gap-2 text-red-500 pixel-text">
+                      <AlertCircle className="w-5 h-5" />
+                      <p>{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Balance Warning */}
+                {!addLiquidityValidation.isValid && !error && (
+                  <div className="p-4 border-2 border-yellow-500 bg-yellow-500/10">
+                    <div className="flex items-start gap-2 text-yellow-500 pixel-text">
+                      <Wallet className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-1">Insufficient Balance</p>
+                        {addLiquidityValidation.errors.map((err, i) => (
+                          <p key={i} className="text-sm">{err}</p>
+                        ))}
+                        {accountAddress && (
+                          <p className="text-sm mt-2">
+                            Send tokens to your Quantum Account:<br/>
+                            <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-semibold mb-2 text-foreground">
-                      TOKEN_0_AMOUNT
+                      TOKEN_0_AMOUNT ({pool.token0Symbol})
                     </label>
                     <input
                       type="number"
@@ -362,10 +501,13 @@ export default function PoolDetail() {
                       className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
                       placeholder="0.0"
                     />
+                    <p className="text-xs text-foreground/50 mt-1">
+                      Balance: {getTokenBalance(pool.token0Symbol || "").toFixed(4)} {pool.token0Symbol}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-2 text-foreground">
-                      TOKEN_1_AMOUNT
+                      TOKEN_1_AMOUNT ({pool.token1Symbol})
                     </label>
                     <input
                       type="number"
@@ -374,16 +516,24 @@ export default function PoolDetail() {
                       className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
                       placeholder="0.0"
                     />
+                    <p className="text-xs text-foreground/50 mt-1">
+                      Balance: {getTokenBalance(pool.token1Symbol || "").toFixed(4)} {pool.token1Symbol}
+                    </p>
                   </div>
                   <button
                     onClick={handleAddLiquidity}
-                    disabled={opsLoading || !isConnected}
+                    disabled={opsLoading || !isConnected || !addLiquidityValidation.isValid}
                     className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50"
                   >
                     {opsLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
                         ADDING...
+                      </>
+                    ) : !addLiquidityValidation.isValid ? (
+                      <>
+                        <Wallet className="w-4 h-4 inline mr-2" />
+                        INSUFFICIENT_BALANCE
                       </>
                     ) : (
                       "ADD_LIQUIDITY"
@@ -434,6 +584,38 @@ export default function PoolDetail() {
                 <h2 className="text-2xl font-bold text-foreground mb-4">
                   SWAP_TOKENS
                 </h2>
+
+                {/* Error Display */}
+                {error && (
+                  <div className="p-4 border-2 border-red-500 bg-red-500/10">
+                    <div className="flex items-center gap-2 text-red-500 pixel-text">
+                      <AlertCircle className="w-5 h-5" />
+                      <p>{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Balance Warning */}
+                {!swapValidation.isValid && !error && (
+                  <div className="p-4 border-2 border-yellow-500 bg-yellow-500/10">
+                    <div className="flex items-start gap-2 text-yellow-500 pixel-text">
+                      <Wallet className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-1">Insufficient Balance</p>
+                        {swapValidation.errors.map((err, i) => (
+                          <p key={i} className="text-sm">{err}</p>
+                        ))}
+                        {accountAddress && (
+                          <p className="text-sm mt-2">
+                            Send tokens to your Quantum Account:<br/>
+                            <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-semibold mb-2 text-foreground">
@@ -446,8 +628,8 @@ export default function PoolDetail() {
                       }
                       className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
                     >
-                      <option value="token0">Token 0</option>
-                      <option value="token1">Token 1</option>
+                      <option value="token0">{pool.token0Symbol || "Token 0"}</option>
+                      <option value="token1">{pool.token1Symbol || "Token 1"}</option>
                     </select>
                   </div>
                   <div>
@@ -461,16 +643,24 @@ export default function PoolDetail() {
                       className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
                       placeholder="0.0"
                     />
+                    <p className="text-xs text-foreground/50 mt-1">
+                      Balance: {getTokenBalance(swapTokenIn === "token0" ? (pool.token0Symbol || "") : (pool.token1Symbol || "")).toFixed(4)} {swapTokenIn === "token0" ? pool.token0Symbol : pool.token1Symbol}
+                    </p>
                   </div>
                   <button
                     onClick={handleSwap}
-                    disabled={opsLoading || !isConnected}
+                    disabled={opsLoading || !isConnected || !swapValidation.isValid}
                     className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50"
                   >
                     {opsLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
                         SWAPPING...
+                      </>
+                    ) : !swapValidation.isValid ? (
+                      <>
+                        <Wallet className="w-4 h-4 inline mr-2" />
+                        INSUFFICIENT_BALANCE
                       </>
                     ) : (
                       "EXECUTE_SWAP"

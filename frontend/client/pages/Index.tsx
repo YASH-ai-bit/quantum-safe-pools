@@ -1,15 +1,17 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Shield, Zap, TrendingUp, Lock, BarChart3, Users, Loader2 } from "lucide-react";
+import { ArrowRight, Shield, Zap, TrendingUp, Lock, BarChart3, Users, Loader2, Copy } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
+import { useSnap } from "@/hooks/useSnap";
 
 export default function Index() {
   const { totalBalance, tokenBalances, loading: walletLoading } = useWalletData();
   const { pools, loading: poolsLoading } = usePools();
   const { stats, loading: statsLoading } = usePlatformStats();
+  const { accountAddress, isConnected } = useSnap();
 
   // Get top 2 pools by TVL
   const topPools = pools
@@ -81,6 +83,28 @@ export default function Index() {
                 </div>
 
                 <div className="relative z-10 pt-8 space-y-6">
+                  {/* Show Quantum Account Address */}
+                  {isConnected && accountAddress && (
+                    <div className="space-y-1 pixel-text text-primary">
+                      <p className="text-xs text-foreground/60">{'> quantum_account:'}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-primary break-all">
+                          {accountAddress.slice(0, 10)}...{accountAddress.slice(-8)}
+                        </span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(accountAddress);
+                            alert('Address copied! Send funds here to use pools.');
+                          }}
+                          className="text-primary hover:text-primary/80"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-foreground/40">Send tokens here to use pools</p>
+                    </div>
+                  )}
+
                   <div className="space-y-2 pixel-text text-primary">
                     <p className="text-sm">{'> Balance:'}</p>
                     {walletLoading ? (

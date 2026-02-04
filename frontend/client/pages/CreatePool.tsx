@@ -8,8 +8,9 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
@@ -28,6 +29,22 @@ const TOKEN_ADDRESSES: Record<string, string> = {
   LINK: "0x779877A7B0D9E8603169DdbD7836e478b4624789", // Sepolia LINK
 };
 
+// Token decimals mapping
+const TOKEN_DECIMALS: Record<string, number> = {
+  ETH: 18,
+  WETH: 18,
+  USDC: 6,
+  USDT: 6,
+  DAI: 18,
+  PYUSD: 6,
+  LINK: 18,
+};
+
+// Get decimals for a token symbol
+const getTokenDecimals = (symbol: string): number => {
+  return TOKEN_DECIMALS[symbol.toUpperCase()] ?? 18;
+};
+
 export default function CreatePool() {
   const [step, setStep] = useState(1);
   const [tokenA, setTokenA] = useState("");
@@ -41,9 +58,9 @@ export default function CreatePool() {
   const navigate = useNavigate();
   const { createPool, approveToken, addLiquidity, loading } =
     usePoolOperations();
-  const { refetch: refetchWallet } = useWalletData();
+  const { refetch: refetchWallet, tokenBalances } = useWalletData();
   const { refetch: refetchPools } = usePools();
-  const { isConnected } = useSnap();
+  const { isConnected, accountAddress } = useSnap();
 
   const tokens = [
     { symbol: "ETH", name: "Ethereum", address: TOKEN_ADDRESSES.ETH },
@@ -65,10 +82,45 @@ export default function CreatePool() {
 
   const availableTokensForB = tokens.filter((t) => t.symbol !== tokenA);
 
+  // Helper to get token balance from wallet data
+  const getTokenBalance = (symbol: string): number => {
+    const token = tokenBalances.find((t) => t.symbol === symbol);
+    if (!token) return 0;
+    return parseFloat(token.amount) || 0;
+  };
+
+  // Validate balances for selected tokens
+  const balanceValidation = useMemo(() => {
+    if (!tokenA || !tokenB || !amountA || !amountB) {
+      return { isValid: true, errors: [] };
+    }
+
+    const errors: string[] = [];
+    const balanceA = getTokenBalance(tokenA);
+    const balanceB = getTokenBalance(tokenB);
+    const requiredA = parseFloat(amountA) || 0;
+    const requiredB = parseFloat(amountB) || 0;
+
+    if (requiredA > 0 && balanceA < requiredA) {
+      errors.push(`Insufficient ${tokenA} balance. You have ${balanceA.toFixed(4)} but need ${requiredA}`);
+    }
+    if (requiredB > 0 && balanceB < requiredB) {
+      errors.push(`Insufficient ${tokenB} balance. You have ${balanceB.toFixed(4)} but need ${requiredB}`);
+    }
+
+    return { isValid: errors.length === 0, errors };
+  }, [tokenA, tokenB, amountA, amountB, tokenBalances]);
+
   const handleCreatePool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConnected) {
       setError("Please connect MetaMask Flask first");
+      return;
+    }
+
+    // Validate token balances before proceeding
+    if (!balanceValidation.isValid) {
+      setError(balanceValidation.errors.join(". ") + `. Send tokens to your Quantum Account: ${accountAddress}`);
       return;
     }
 
@@ -154,9 +206,18 @@ export default function CreatePool() {
         console.log("Waiting for RPC sync...");
         await new Promise((r) => setTimeout(r, 5000));
 
-        // 2. Prepare for Adding Liquidity
-        const parsedAmountA = parseUnits(amountA, 18); // Assuming 18 decimals for now
-        const parsedAmountB = parseUnits(amountB, 18);
+        // 2. Prepare for Adding Liquidity with correct token decimals
+        const decimalsA = getTokenDecimals(tokenA);
+        const decimalsB = getTokenDecimals(tokenB);
+        
+        console.log("[CREATE_POOL] Token A:", tokenA, "decimals:", decimalsA);
+        console.log("[CREATE_POOL] Token B:", tokenB, "decimals:", decimalsB);
+        
+        const parsedAmountA = parseUnits(amountA, decimalsA);
+        const parsedAmountB = parseUnits(amountB, decimalsB);
+
+        console.log("[CREATE_POOL] Amount A (wei):", parsedAmountA.toString());
+        console.log("[CREATE_POOL] Amount B (wei):", parsedAmountB.toString());
 
         // Determine if tokens are ETH
         const isTokenA_ETH = tokenAObj.symbol === "ETH";
@@ -183,10 +244,11 @@ export default function CreatePool() {
         const tickLower = -887220;
         const tickUpper = 887220;
 
-        // Approximating liquidityDelta for demo:
-        // In full range 1:1, L ~= amount.
-        // We take the amount of token A as the liquidity delta for simplicity in this demo.
-        const liquidityDelta = parsedAmountA;
+        // For liquidity delta, use the 18-decimal amount (ETH if it's one of the tokens)
+        // Otherwise scale up the amount to simulate a reasonable liquidity value
+        const liquidityDelta = decimalsA === 18 ? parsedAmountA : 
+                               decimalsB === 18 ? parsedAmountB :
+                               parsedAmountA * BigInt(10 ** (18 - decimalsA)); // Scale up if needed
 
         // Calculate ETH value to send
         let ethValue = "0";
@@ -458,6 +520,27 @@ export default function CreatePool() {
                   />
                 </div>
 
+                {/* Balance Warning */}
+                {!balanceValidation.isValid && (
+                  <div className="p-4 border-2 border-yellow-500 bg-yellow-500/10">
+                    <div className="flex items-start gap-2 text-yellow-500 pixel-text">
+                      <Wallet className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-1">Insufficient Balance</p>
+                        {balanceValidation.errors.map((err, i) => (
+                          <p key={i} className="text-sm">{err}</p>
+                        ))}
+                        {accountAddress && (
+                          <p className="text-sm mt-2">
+                            Send tokens to your Quantum Account:<br/>
+                            <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="p-4 border-2 border-primary bg-primary/5">
                   <p className="text-sm text-foreground/80 pixel-text">
                     You will receive LP tokens representing your share of the
@@ -501,6 +584,27 @@ export default function CreatePool() {
                     <div className="flex items-center gap-2 text-red-500 pixel-text">
                       <AlertCircle className="w-5 h-5" />
                       <p>{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Balance Warning in Step 3 */}
+                {!balanceValidation.isValid && !error && (
+                  <div className="p-4 border-2 border-yellow-500 bg-yellow-500/10">
+                    <div className="flex items-start gap-2 text-yellow-500 pixel-text">
+                      <Wallet className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-1">⚠️ Cannot Create Pool - Insufficient Balance</p>
+                        {balanceValidation.errors.map((err, i) => (
+                          <p key={i} className="text-sm">{err}</p>
+                        ))}
+                        {accountAddress && (
+                          <p className="text-sm mt-2">
+                            Send tokens to your Quantum Account:<br/>
+                            <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -572,13 +676,18 @@ export default function CreatePool() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || !isConnected}
+                    disabled={loading || !isConnected || !balanceValidation.isValid}
                     className="flex-1 py-3 border-2 border-primary text-primary font-bold hover:bg-primary hover:text-black transition-all flex items-center justify-center gap-2 pixel-text disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         CREATING...
+                      </>
+                    ) : !balanceValidation.isValid ? (
+                      <>
+                        <Wallet className="w-4 h-4" />
+                        INSUFFICIENT_BALANCE
                       </>
                     ) : (
                       <>
