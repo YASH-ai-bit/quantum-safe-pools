@@ -156,16 +156,19 @@ export function packGasFees(
 }
 
 /**
- * Get nonce from EntryPoint
+ * Get nonce from EntryPoint (v0.7)
+ * Uses getNonce(address,uint192) selector: 0x35567e1a
  */
 export async function getAccountNonce(
   accountAddress: string,
   provider: Provider,
   blockTag: string = 'latest'
 ): Promise<bigint> {
+  // v0.7 EntryPoint uses getNonce(address sender, uint192 key)
+  // Function selector: 0x35567e1a
   const nonceCallData =
-    '0x7ecebe00' +
-    accountAddress.slice(2).padStart(64, '0') +
+    '0x35567e1a' +
+    accountAddress.slice(2).toLowerCase().padStart(64, '0') +
     '0'.padStart(64, '0'); // key = 0
 
   try {
@@ -173,7 +176,9 @@ export async function getAccountNonce(
       to: ENTRYPOINT_ADDRESS,
       data: nonceCallData,
     }, blockTag);
-    return BigInt(result);
+    const nonce = BigInt(result);
+    console.log(`[YELLOW-SDK] Fetched nonce (${blockTag}):`, nonce.toString());
+    return nonce;
   } catch (error) {
     if (blockTag === 'pending') {
       // Fallback to latest if pending fails
@@ -184,9 +189,11 @@ export async function getAccountNonce(
         }, 'latest');
         return BigInt(result);
       } catch (e) {
+        console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0');
         return 0n;
       }
     }
+    console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0');
     return 0n;
   }
 }

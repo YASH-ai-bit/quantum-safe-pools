@@ -55,12 +55,13 @@ export default function CreatePool() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null); // Progress modal state
   const navigate = useNavigate();
   const { createPool, approveToken, addLiquidity, loading } =
     usePoolOperations();
   const { refetch: refetchWallet, tokenBalances } = useWalletData();
   const { refetch: refetchPools } = usePools();
-  const { isConnected, accountAddress } = useSnap();
+  const { isConnected, accountAddress, batchTransactions } = useSnap();
 
   const tokens = [
     { symbol: "ETH", name: "Ethereum", address: TOKEN_ADDRESSES.ETH },
@@ -118,181 +119,260 @@ export default function CreatePool() {
       return;
     }
 
-    // Validate token balances before proceeding
-    if (!balanceValidation.isValid) {
-      setError(balanceValidation.errors.join(". ") + `. Send tokens to your Quantum Account: ${accountAddress}`);
-      return;
-    }
-
+    // Reset states
     setError(null);
     setTxHash(null);
     setIsSuccess(false);
+    setStep(4); // Processing step
+    setProgressMessage("Preparing transactions...");
 
     try {
+      // Validate balances first
+      if (!balanceValidation.isValid) {
+        throw new Error(balanceValidation.errors.join(", "));
+      }
+
+      // Get token objects
       const tokenAObj = tokens.find((t) => t.symbol === tokenA);
       const tokenBObj = tokens.find((t) => t.symbol === tokenB);
-
       if (!tokenAObj || !tokenBObj) {
         throw new Error("Invalid token selection");
       }
 
-      // Validate addresses are properly defined
-      if (
-        !tokenAObj.address ||
-        tokenAObj.address === "0x" ||
-        tokenAObj.address.length < 42
-      ) {
-        throw new Error(
-          `Invalid address for ${tokenA}. Please select a different token.`,
-        );
+      // Validate addresses
+      if (!tokenAObj.address || tokenAObj.address.length < 42) {
+        throw new Error(`Invalid address for ${tokenA}.`);
       }
-      if (
-        !tokenBObj.address ||
-        tokenBObj.address === "0x" ||
-        tokenBObj.address.length < 42
-      ) {
-        throw new Error(
-          `Invalid address for ${tokenB}. Please select a different token.`,
-        );
+      if (!tokenBObj.address || tokenBObj.address.length < 42) {
+        throw new Error(`Invalid address for ${tokenB}.`);
       }
 
-      console.log(
-        "%c[CREATE_POOL] Token A:",
-        "color: #00ffff;",
-        tokenA,
-        tokenAObj.address,
-      );
-      console.log(
-        "%c[CREATE_POOL] Token B:",
-        "color: #00ffff;",
-        tokenB,
-        tokenBObj.address,
-      );
+      console.log("%c[CREATE_POOL] Token A:", "color: #00ffff;", tokenA, tokenAObj.address);
+      console.log("%c[CREATE_POOL] Token B:", "color: #00ffff;", tokenB, tokenBObj.address);
 
-      // Calculate initial price (simplified - would use actual price oracle)
-      // For now, use 1:1 ratio - convert to sqrtPriceX96
-      // sqrtPriceX96 = sqrt(price) * 2^96
-      // For 1:1 price, sqrt(1) * 2^96 = 2^96
-      const initialPrice = BigInt("79228162514264337593543950336"); // 2^96
+      // Calculate pool parameters
+      const initialPrice = BigInt("79228162514264337593543950336"); // 2^96 for 1:1
+      const tickSpacing = 60;
+      const dynamicFee = 0x800000; // Dynamic fee flag for Uniswap V4 hooks
 
-      // Fee in basis points (0.30% = 3000)
-      const feeBps = Math.round(parseFloat(fee) * 100);
-      const tickSpacing = 60; // Standard tick spacing
+      // Token decimals and amounts
+      const decimalsA = getTokenDecimals(tokenA);
+      const decimalsB = getTokenDecimals(tokenB);
+      const parsedAmountA = parseUnits(amountA, decimalsA);
+      const parsedAmountB = parseUnits(amountB, decimalsB);
 
-      console.log("%c[CREATE_POOL] Fee (bps):", "color: #00ffff;", feeBps);
-      console.log(
-        "%c[CREATE_POOL] Tick spacing:",
-        "color: #00ffff;",
-        tickSpacing,
-      );
+      console.log("[CREATE_POOL] Amount A (wei):", parsedAmountA.toString());
+      console.log("[CREATE_POOL] Amount B (wei):", parsedAmountB.toString());
 
-      // 1. Create Pool (Initialize)
-      const result = await createPool(
-        tokenAObj.address,
-        tokenBObj.address,
-        feeBps,
-        tickSpacing,
-        initialPrice,
-      );
+      // Determine if tokens are ETH
+      const isTokenA_ETH = tokenAObj.symbol === "ETH";
+      const isTokenB_ETH = tokenBObj.symbol === "ETH";
 
-      if (result?.hash) {
-        console.log(
-          "%c[CREATE_POOL] Pool initialized! Hash:",
-          "color: #00ff00;",
-          result.hash,
-        );
+      // Sort addresses to match Uniswap V4 requirement (currency0 < currency1)
+      const [sortedCurrency0, sortedCurrency1] =
+        tokenAObj.address.toLowerCase() < tokenBObj.address.toLowerCase()
+          ? [tokenAObj.address, tokenBObj.address]
+          : [tokenBObj.address, tokenAObj.address];
 
-        // Wait for RPC synchronization (Nonce increment propagation)
-        console.log("Waiting for RPC sync...");
-        await new Promise((r) => setTimeout(r, 5000));
+      // Router address
+      const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680";
 
-        // 2. Prepare for Adding Liquidity with correct token decimals
-        const decimalsA = getTokenDecimals(tokenA);
-        const decimalsB = getTokenDecimals(tokenB);
-        
-        console.log("[CREATE_POOL] Token A:", tokenA, "decimals:", decimalsA);
-        console.log("[CREATE_POOL] Token B:", tokenB, "decimals:", decimalsB);
-        
-        const parsedAmountA = parseUnits(amountA, decimalsA);
-        const parsedAmountB = parseUnits(amountB, decimalsB);
-
-        console.log("[CREATE_POOL] Amount A (wei):", parsedAmountA.toString());
-        console.log("[CREATE_POOL] Amount B (wei):", parsedAmountB.toString());
-
-        // Determine if tokens are ETH
-        const isTokenA_ETH = tokenAObj.symbol === "ETH";
-        const isTokenB_ETH = tokenBObj.symbol === "ETH";
-
-        // 3. Approve Tokens (if not ETH)
-        // We approve the Router (CONTRACTS.QUANTUM_POOL_ROUTER)
-        const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter per logs
-
-        if (!isTokenA_ETH) {
-          await approveToken(tokenAObj.address, ROUTER_ADDRESS, parsedAmountA);
-          console.log("Waiting for RPC sync...");
-          await new Promise((r) => setTimeout(r, 5000));
+      // Calculate liquidity delta (geometric mean for full range)
+      const sqrtApprox = (a: bigint): bigint => {
+        if (a < 2n) return a;
+        let x = a;
+        let y = (x + 1n) / 2n;
+        while (y < x) {
+          x = y;
+          y = (x + a / x) / 2n;
         }
-        if (!isTokenB_ETH) {
-          await approveToken(tokenBObj.address, ROUTER_ADDRESS, parsedAmountB);
-          console.log("Waiting for RPC sync...");
-          await new Promise((r) => setTimeout(r, 5000));
-        }
+        return x;
+      };
+      const liquidityDelta = sqrtApprox(parsedAmountA * parsedAmountB);
 
-        // 4. Add Liquidity
-        // Full range tick for tickSpacing 60: -887220 to 887220 (rounded to multiple of 60)
-        // -887220 is divisible by 60 (-14787 * 60)
-        const tickLower = -887220;
-        const tickUpper = 887220;
+      // Tick range for full range position
+      const tickLower = -887220;
+      const tickUpper = 887220;
 
-        // For liquidity delta, use the 18-decimal amount (ETH if it's one of the tokens)
-        // Otherwise scale up the amount to simulate a reasonable liquidity value
-        const liquidityDelta = decimalsA === 18 ? parsedAmountA : 
-                               decimalsB === 18 ? parsedAmountB :
-                               parsedAmountA * BigInt(10 ** (18 - decimalsA)); // Scale up if needed
+      // ETH value to send
+      let ethValue = 0n;
+      if (isTokenA_ETH) ethValue = parsedAmountA;
+      if (isTokenB_ETH) ethValue = parsedAmountB;
 
-        // Calculate ETH value to send
-        let ethValue = "0";
-        if (isTokenA_ETH) ethValue = parsedAmountA.toString();
-        if (isTokenB_ETH) ethValue = parsedAmountB.toString();
+      // Build transaction array for batch execution
+      setProgressMessage("Building batch transaction (4 operations in 1 signature)...");
+      const { encodeFunctionData } = await import("viem");
 
-        // Use dynamic fee (0x800000) to match the pool created by createPool
-        const dynamicFee = 0x800000;
-
-        // Sort addresses to match Uniswap V4 requirement (currency0 < currency1)
-        const [sortedCurrency0, sortedCurrency1] =
-          tokenAObj.address.toLowerCase() < tokenBObj.address.toLowerCase()
-            ? [tokenAObj.address, tokenBObj.address]
-            : [tokenBObj.address, tokenAObj.address];
-
-        const liquidityResult = await addLiquidity(
+      // Transaction 1: Initialize pool
+      const initializeData = encodeFunctionData({
+        abi: [
           {
-            currency0: sortedCurrency0,
-            currency1: sortedCurrency1,
+            name: "initialize",
+            type: "function",
+            inputs: [
+              {
+                name: "key",
+                type: "tuple",
+                components: [
+                  { name: "currency0", type: "address" },
+                  { name: "currency1", type: "address" },
+                  { name: "fee", type: "uint24" },
+                  { name: "tickSpacing", type: "int24" },
+                  { name: "hooks", type: "address" },
+                ],
+              },
+              { name: "sqrtPriceX96", type: "uint160" },
+            ],
+            outputs: [{ name: "tick", type: "int24" }],
+          },
+        ],
+        functionName: "initialize",
+        args: [
+          {
+            currency0: sortedCurrency0 as `0x${string}`,
+            currency1: sortedCurrency1 as `0x${string}`,
             fee: dynamicFee,
             tickSpacing: tickSpacing,
-            hooks: CONTRACTS.QUANTUM_HOOK,
+            hooks: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
           },
-          tickLower,
-          tickUpper,
-          liquidityDelta,
-          ethValue,
-        );
+          initialPrice,
+        ],
+      });
 
-        // Set success state with FINAL transaction hash (liquidity addition)
-        if (liquidityResult?.hash) {
-          setTxHash(liquidityResult.hash);
-          setIsSuccess(true);
-          // Refresh data
-          refetchPools();
-          refetchWallet();
-          // Navigate to pools page after a delay
-          setTimeout(() => {
-            navigate("/pools");
-          }, 3000);
-        }
+      // Transaction 2 & 3: Approve tokens (if not ETH)
+      const MAX_APPROVAL = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+      const approveAbi = [
+        {
+          name: "approve",
+          type: "function",
+          inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount", type: "uint256" },
+          ],
+          outputs: [{ name: "success", type: "bool" }],
+        },
+      ];
+
+      // Transaction 4: Add liquidity
+      const addLiquidityData = encodeFunctionData({
+        abi: [
+          {
+            name: "addLiquidity",
+            type: "function",
+            inputs: [
+              {
+                name: "key",
+                type: "tuple",
+                components: [
+                  { name: "currency0", type: "address" },
+                  { name: "currency1", type: "address" },
+                  { name: "fee", type: "uint24" },
+                  { name: "tickSpacing", type: "int24" },
+                  { name: "hooks", type: "address" },
+                ],
+              },
+              {
+                name: "params",
+                type: "tuple",
+                components: [
+                  { name: "tickLower", type: "int24" },
+                  { name: "tickUpper", type: "int24" },
+                  { name: "liquidityDelta", type: "int256" },
+                  { name: "salt", type: "bytes32" },
+                ],
+              },
+            ],
+            outputs: [],
+          },
+        ],
+        functionName: "addLiquidity",
+        args: [
+          {
+            currency0: sortedCurrency0 as `0x${string}`,
+            currency1: sortedCurrency1 as `0x${string}`,
+            fee: dynamicFee,
+            tickSpacing: tickSpacing,
+            hooks: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
+          },
+          {
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            liquidityDelta: liquidityDelta,
+            salt: "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
+          },
+        ],
+      });
+
+      // Build transactions array
+      const transactions: Array<{ to: string; value: string; data: string }> = [
+        // 1. Initialize pool
+        { to: ROUTER_ADDRESS, value: "0", data: initializeData },
+      ];
+
+      // 2. Approve token A (if not ETH)
+      if (!isTokenA_ETH) {
+        const approveDataA = encodeFunctionData({
+          abi: approveAbi,
+          functionName: "approve",
+          args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
+        });
+        transactions.push({ to: tokenAObj.address, value: "0", data: approveDataA });
+      }
+
+      // 3. Approve token B (if not ETH)
+      if (!isTokenB_ETH) {
+        const approveDataB = encodeFunctionData({
+          abi: approveAbi,
+          functionName: "approve",
+          args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
+        });
+        transactions.push({ to: tokenBObj.address, value: "0", data: approveDataB });
+      }
+
+      // 4. Add liquidity
+      transactions.push({
+        to: ROUTER_ADDRESS,
+        value: ethValue.toString(),
+        data: addLiquidityData,
+      });
+
+      console.log("%c[CREATE_POOL] Batch transactions prepared:", "color: #00ffff;", transactions.length);
+      console.log("%c[CREATE_POOL] Operations:", "color: #00ffff;", [
+        "1. Initialize pool",
+        isTokenA_ETH ? null : "2. Approve " + tokenA,
+        isTokenB_ETH ? null : "3. Approve " + tokenB,
+        "4. Add liquidity",
+      ].filter(Boolean));
+
+      // Execute batch transaction (single signature!)
+      setProgressMessage("Please sign ONE transaction for all operations...");
+
+      const result = await batchTransactions(transactions);
+
+      console.log("%c[CREATE_POOL] Batch result:", "color: #00ff00;", result);
+
+      if (result?.success && result?.transactionHash) {
+        setTxHash(result.transactionHash);
+        setIsSuccess(true);
+        setProgressMessage("Pool created with liquidity!");
+
+        // Refresh data
+        refetchPools();
+        refetchWallet();
+
+        // Navigate to pools page after a delay
+        setTimeout(() => {
+          navigate("/pools");
+        }, 3000);
+      } else if (result?.error) {
+        throw new Error(result.error);
+      } else {
+        throw new Error("Batch transaction failed without error message");
       }
     } catch (err: any) {
+      console.error("[CREATE_POOL] Error:", err);
       setError(err.message || "Failed to create pool");
+      setProgressMessage(null);
       setStep(5); // Error step
     }
   };
@@ -320,24 +400,49 @@ export default function CreatePool() {
             </p>
           </div>
 
-          {/* Steps */}
+          {/* Progress Modal */}
+          {progressMessage && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+              <div className="bg-black border-2 border-primary p-8 max-w-md mx-4">
+                <div className="text-center">
+                  <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
+                  <h2 className="text-xl font-bold mb-4 pixel-text text-primary">
+                    🔐 Quantum-Safe Batch Transaction
+                  </h2>
+                  <p className="text-foreground/80 pixel-text mb-4">
+                    {progressMessage}
+                  </p>
+                  <div className="text-left bg-black/50 border border-primary/30 p-4 mt-4">
+                    <p className="text-sm text-foreground/60 pixel-text mb-2">Operations in this batch:</p>
+                    <ul className="text-sm text-foreground/80 pixel-text space-y-1">
+                      <li>✓ 1. Initialize pool</li>
+                      <li>✓ 2. Approve Token A</li>
+                      <li>✓ 3. Approve Token B</li>
+                      <li>✓ 4. Add liquidity</li>
+                    </ul>
+                  </div>
+                  <p className="text-xs text-foreground/50 mt-4 pixel-text">
+                    All 4 operations in 1 quantum-safe signature!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="flex gap-4 mb-12">
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${
-                    s <= step
-                      ? "bg-primary text-black border-primary"
-                      : "bg-black border-primary/30 text-foreground/60"
-                  }`}
+                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${s <= step
+                    ? "bg-primary text-black border-primary"
+                    : "bg-black border-primary/30 text-foreground/60"
+                    }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`h-1 w-12 transition-all ${
-                      s < step ? "bg-primary" : "bg-primary/30"
-                    }`}
+                    className={`h-1 w-12 transition-all ${s < step ? "bg-primary" : "bg-primary/30"
+                      }`}
                   />
                 )}
               </div>
@@ -532,7 +637,7 @@ export default function CreatePool() {
                         ))}
                         {accountAddress && (
                           <p className="text-sm mt-2">
-                            Send tokens to your Quantum Account:<br/>
+                            Send tokens to your Quantum Account:<br />
                             <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
                           </p>
                         )}
@@ -600,7 +705,7 @@ export default function CreatePool() {
                         ))}
                         {accountAddress && (
                           <p className="text-sm mt-2">
-                            Send tokens to your Quantum Account:<br/>
+                            Send tokens to your Quantum Account:<br />
                             <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
                           </p>
                         )}
