@@ -459,13 +459,95 @@ async function handleSendTransaction(origin: string, params: any) {
     paymasterAddress,
   });
 
+
+  // Fetch gas prices from Pimlico bundler for accurate pricing
+  const bundlerUrl =
+    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
+  logYellow('Fetching gas prices from Pimlico...');
+  const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
+
+  // ------------------------------------------------------------------
+  //  RICH DECODING LOGIC (The "Informative Signing" Feature)
+  // ------------------------------------------------------------------
+  let actionDescription = 'Unknown Action';
+  let detailedContent = <Text>Unable to decode transaction data.</Text>;
+
+  try {
+    if (data && data !== '0x') {
+      const { ROUTER_ABI, ERC20_ABI } = await import('./abis');
+      const routerInterface = new Interface(ROUTER_ABI);
+      const erc20Interface = new Interface(ERC20_ABI);
+
+      // Attempt to decode as Router Call
+      try {
+        const decoded = routerInterface.parseTransaction({ data });
+        if (decoded) {
+          if (decoded.name === 'submitOrder') {
+            const [key, orderKey, amountIn] = decoded.args;
+            actionDescription = 'Submit TWAMM Order';
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> TWAMM Order</Text>
+                <Text><Bold>Pair:</Bold> {`${key[0].slice(0, 6)}... / ${key[1].slice(0, 6)}...`}</Text>
+                <Text><Bold>Amount In:</Bold> {amountIn.toString()}</Text>
+                <Text><Bold>Duration:</Bold> {orderKey[1].toString()}</Text>
+                <Text><Bold>Fee Tier:</Bold> {key[2].toString()} (Dynamic)</Text>
+              </Box>
+            );
+          } else if (decoded.name === 'modifyLiquidity') {
+            actionDescription = 'Modify Liquidity';
+            const [key, params] = decoded.args;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Add/Remove Liquidity</Text>
+                <Text><Bold>Pool:</Bold> {`${key[0].slice(0, 6)}... / ${key[1].slice(0, 6)}...`}</Text>
+                <Text><Bold>Delta:</Bold> {params[2].toString()}</Text>
+                <Text><Bold>Range:</Bold> [{params[0].toString()}, {params[1].toString()}]</Text>
+              </Box>
+            );
+          } else if (decoded.name === 'swap') {
+            actionDescription = 'Swap (Quantum)';
+            const [key, params] = decoded.args;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Swap</Text>
+                <Text><Bold>ZeroForOne:</Bold> {params[0] ? 'Yes' : 'No'}</Text>
+                <Text><Bold>Amount:</Bold> {params[1].toString()}</Text>
+              </Box>
+            );
+          } else {
+            actionDescription = decoded.name; // Fallback for other methods
+          }
+        }
+      } catch (e) {
+        // Not a router call, try ERC20
+        try {
+          const decoded = erc20Interface.parseTransaction({ data });
+          if (decoded) {
+            actionDescription = `${decoded.name} (ERC20)`;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Spender:</Bold> {decoded.args[0]}</Text>
+                <Text><Bold>Amount:</Bold> {decoded.args[1].toString()}</Text>
+              </Box>
+            );
+          }
+        } catch (e2) {
+          // Failed both
+        }
+      }
+    }
+  } catch (err) {
+    logYellow('Decoding failed', { err });
+  }
+
+  // Calculate account address (moved up if needed, but safe here)
   await ensureKeypairExists();
 
   const publicKeyHash = await getPublicKeyHash();
   const salt = await getAccountSalt();
   const provider = new JsonRpcProvider(rpcUrl);
 
-  // Calculate account address
   const accountAddress = await calculateAccountAddress(
     publicKeyHash,
     salt,
@@ -475,14 +557,16 @@ async function handleSendTransaction(origin: string, params: any) {
 
   const deployed = await isAccountDeployed(accountAddress, provider);
 
-  // Show confirmation dialog
+  // Show confirmation dialog with RICH DATA
   const approved = await snap.request({
     method: 'snap_dialog',
     params: {
       type: 'confirmation',
       content: (
         <Box>
-          <Heading>🔐 Quantum-Safe Transaction</Heading>
+          <Heading>🔐 {actionDescription}</Heading>
+          <Divider />
+          {detailedContent}
           <Divider />
           <Text>
             <Bold>From:</Bold>
@@ -492,20 +576,12 @@ async function handleSendTransaction(origin: string, params: any) {
             <Bold>To:</Bold>
           </Text>
           <Copyable value={to} />
+          <Divider />
           <Text>
             <Bold>Value:</Bold> {formatEther(value || 0)} ETH
           </Text>
           <Text>
-            <Bold>Account Status:</Bold>{' '}
-            {deployed ? 'Deployed ✅' : 'Not deployed (will deploy)'}
-          </Text>
-          <Divider />
-          <Text>
             <Bold>Origin:</Bold> {origin}
-          </Text>
-          <Text>
-            This transaction will be signed with your quantum-safe Dilithium
-            key.
           </Text>
         </Box>
       ),
@@ -601,11 +677,7 @@ async function handleSendTransaction(origin: string, params: any) {
     );
   }
 
-  // Fetch gas prices from Pimlico bundler for accurate pricing
-  const bundlerUrl =
-    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
-  logYellow('Fetching gas prices from Pimlico...');
-  const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
+
 
   // Construct UserOperation via SDK-optimized helper
   logYellow('Constructing UserOp for transaction...', { to, value, useBatch });

@@ -86,9 +86,9 @@ interface LPPosition {
 }
 
 // Sepolia Token Addresses
-const SEPOLIA_USDC = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
-const SEPOLIA_PYUSD = '0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9';
-const SEPOLIA_LINK = '0x779877A7B0D9E8603169DdbD7836e478b4624789';
+const SEPOLIA_USDC = CONTRACTS.TOKENS.USDC;
+const SEPOLIA_PYUSD = CONTRACTS.TOKENS.PYUSD;
+const SEPOLIA_LINK = CONTRACTS.TOKENS.LINK;
 
 export function useWalletData() {
   const { address: eoaAddress, isConnected: wagmiConnected } = useAccount();

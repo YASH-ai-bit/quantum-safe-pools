@@ -29,12 +29,12 @@ export function hexConcat(items: string[]): string {
  * IMPORTANT: Keep in sync with frontend/shared/contracts.ts
  * Updated 2025-01-02 with correct EntryPoint!
  */
-import { CONTRACTS } from './config';
+import { CONFIG } from './config';
 
-export const ENTRYPOINT_ADDRESS = CONTRACTS.ENTRYPOINT; // v0.7 EntryPoint
-export const FACTORY_ADDRESS = CONTRACTS.FACTORY; // QuantumAccountFactory
-export const VERIFIER_ADDRESS = CONTRACTS.VERIFIER; // Groth16Verifier
-export const REGISTRY_ADDRESS = CONTRACTS.REGISTRY; // QuantumRegistry
+export const ENTRYPOINT_ADDRESS = CONFIG.ENTRYPOINT_ADDRESS; // v0.7 EntryPoint
+export const FACTORY_ADDRESS = CONFIG.QUANTUM_ACCOUNT_FACTORY_ADDRESS; // QuantumAccountFactory
+export const VERIFIER_ADDRESS = "0x605556E6b4fca8021dEBeb7E76328BE3d8dd29Ab"; // Hardcoded for now, or add to CONFIG
+export const REGISTRY_ADDRESS = CONFIG.QUANTUM_REGISTRY_ADDRESS; // QuantumRegistry
 
 // Default ABI coder instance
 const abiCoder = AbiCoder.defaultAbiCoder();

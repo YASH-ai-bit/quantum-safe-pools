@@ -165,14 +165,13 @@ export function usePoolOperations() {
   const [snapLoading, setSnapLoading] = useState(false);
 
   // Hook for Snap - all operations go through quantum account
-  const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction } =
+  const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction, batchTransactions } =
     useSnap();
 
   const createPool = useCallback(
     async (
       currency0: string,
       currency1: string,
-      fee: number,
       tickSpacing: number,
       initialPrice: bigint,
     ) => {
@@ -632,8 +631,147 @@ export function usePoolOperations() {
     [isConnected, address, isSnapConnected, sendSnapTransaction],
   );
 
+  // Atomic Batch Pool Creation
+  const createPoolBatched = useCallback(
+    async (
+      currency0: string,
+      currency1: string,
+      tickSpacing: number,
+      initialPrice: bigint,
+      amountA: bigint,
+      amountB: bigint
+    ) => {
+      if (!isConnected || !address) {
+        throw new Error("Please connect MetaMask Flask first");
+      }
+      if (!isSnapConnected) {
+        throw new Error(
+          "Please connect your Quantum Wallet (MetaMask Snap) to create pools",
+        );
+      }
+
+      setError(null);
+      setSnapLoading(true);
+
+      try {
+        const txs: Array<{ to: string; value: string; data: string }> = [];
+
+        // --- 1. PREPARE DATA ---
+
+        // Uniswap V4 requires sorted tokens
+        const [orderedCurrency0, orderedCurrency1] =
+          currency0.toLowerCase() < currency1.toLowerCase()
+            ? [currency0, currency1]
+            : [currency1, currency0];
+
+        const dynamicFee = 0x800000;
+        const poolKey = {
+          currency0: orderedCurrency0 as `0x${string}`,
+          currency1: orderedCurrency1 as `0x${string}`,
+          fee: dynamicFee,
+          tickSpacing: tickSpacing,
+          hooks: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
+        };
+
+        const ROUTER_ADDRESS = CONTRACTS.QUANTUM_POOL_ROUTER;
+        const MAX_APPROVAL = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+        // --- 2. CONSTRUCT BATCH ---
+
+        // A. Initialize Pool
+        const initData = encodeFunctionData({
+          abi: QUANTUM_POOL_ROUTER_ABI,
+          functionName: "initialize",
+          args: [poolKey, initialPrice] as any,
+        });
+        txs.push({ to: ROUTER_ADDRESS, value: "0", data: initData });
+
+        // B. Approve Tokens (Router needs to spend them)
+        // Token 0
+        if (orderedCurrency0 !== "0x0000000000000000000000000000000000000000") {
+          const approveData0 = encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: "approve",
+            args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
+          });
+          txs.push({ to: orderedCurrency0, value: "0", data: approveData0 });
+        }
+
+        // Token 1
+        if (orderedCurrency1 !== "0x0000000000000000000000000000000000000000") {
+          const approveData1 = encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: "approve",
+            args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
+          });
+          txs.push({ to: orderedCurrency1, value: "0", data: approveData1 });
+        }
+
+        // C. Add Liquidity
+        // Full range tick logic
+        const tickLower = -887220;
+        const tickUpper = 887220;
+
+        // Liquidity Delta Calculation (Approximate for full range)
+        // L = sqrt(amount0 * amount1)
+        const liquidityDelta = BigInt(Math.floor(Math.sqrt(Number(amountA * amountB))));
+        // Note: JS Math.sqrt loses precision for bigints, but for hackathon UI this is acceptable approx
+        // A better way would be using a bigint sqrt library, but sticking to simple for now.
+        // Actually, let's use the one from CreatePool if possible, or simple bigint sqrt
+        const sqrtBigInt = (n: bigint) => {
+          if (n < 0n) throw new Error("negative number");
+          if (n < 2n) return n;
+          let x = n;
+          let y = (x + 1n) / 2n;
+          while (y < x) { x = y; y = (x + n / x) / 2n; }
+          return x;
+        };
+        const liquidity = sqrtBigInt(amountA * amountB);
+
+        const params: ModifyLiquidityParams = {
+          tickLower,
+          tickUpper,
+          liquidityDelta: liquidity,
+          salt: "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
+        };
+
+        const addLiquidityData = encodeFunctionData({
+          abi: QUANTUM_POOL_ROUTER_ABI,
+          functionName: "addLiquidity",
+          args: [poolKey, params] as any,
+        });
+
+        // ETH Value for the batch
+        // If either token is ETH, we need to send value. 
+        // BUT, since we are calling the Router, and the Router expects msg.value for ETH inputs...
+        // Wait, the router calls Manager.modifyLiquidity. 
+        // If the pool has ETH, the router forwards value.
+        // So we sum up ETH amounts.
+        let ethValue = 0n;
+        if (orderedCurrency0 === "0x0000000000000000000000000000000000000000") ethValue += amountA;
+        if (orderedCurrency1 === "0x0000000000000000000000000000000000000000") ethValue += amountB;
+
+        txs.push({ to: ROUTER_ADDRESS, value: ethValue.toString(), data: addLiquidityData });
+
+        // --- 3. SEND BATCH ---
+        console.log("Creating pool with batch:", txs);
+        const result = await batchTransactions(txs);
+
+        return result;
+
+      } catch (err: any) {
+        console.error("Batch Creation Failed:", err);
+        setError(err.message);
+        throw err;
+      } finally {
+        setSnapLoading(false);
+      }
+    }, [isConnected, address, isSnapConnected, sendSnapTransaction, batchTransactions]
+  );
+
   return {
     createPool,
+    createPoolBatched,
     addLiquidity,
     removeLiquidity,
     swap,

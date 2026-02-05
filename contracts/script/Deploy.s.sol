@@ -10,8 +10,8 @@ import "../src/HackathonPaymaster.sol";
 import "../src/QuantumHook.sol";
 import "../src/QuantumPoolRouter.sol";
 // Use interface only - no full EntryPoint import to avoid solc version conflict
-import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
-import {PoolManager} from "@uniswap/v4-core/PoolManager.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
 
 /**
  * @title Deploy
@@ -57,13 +57,22 @@ contract Deploy is Script {
         PoolManager poolManager = new PoolManager(deployer);
         console.log("PoolManager deployed to:", address(poolManager));
 
-        // 7. Deploy QuantumHook
-        QuantumHook quantumHook = new QuantumHook(IPoolManager(address(poolManager)), registry);
+
+        // 7. Deploy QuantumHook (Super Hook)
+        // Interval: 3600 seconds (1 hour) for TWAMM expiration
+        uint256 expirationInterval = 3600; 
+        QuantumHook quantumHook = new QuantumHook(IPoolManager(address(poolManager)), registry, expirationInterval);
         console.log("QuantumHook deployed to:", address(quantumHook));
 
-        // 8. Deploy QuantumPoolRouter
+        // 8. Deploy QuantumPoolRouter (Still needed for routing)
+        // Ensure Router is compatible or if we need to redeploy
         QuantumPoolRouter router = new QuantumPoolRouter(IPoolManager(address(poolManager)));
         console.log("QuantumPoolRouter deployed to:", address(router));
+
+        // 9. Whitelist Router in Hook
+        quantumHook.setRouter(address(router));
+
+        console.log("Router whitelisted in QuantumHook");
 
         vm.stopBroadcast();
 

@@ -12,21 +12,21 @@ const REGISTRY_ABI = [
 // Helper to get Flask provider specifically
 function getFlaskProvider() {
   const { ethereum } = window as any;
-  
+
   if (!ethereum) {
     return null;
   }
 
   // If multiple providers exist, find Flask specifically
   if (ethereum.providers?.length) {
-    const flaskProvider = ethereum.providers.find((provider: any) => 
+    const flaskProvider = ethereum.providers.find((provider: any) =>
       provider.isMetaMask && provider.isFlask
     );
-    
+
     if (flaskProvider) {
       return flaskProvider;
     }
-    
+
     // Fallback: try the first MetaMask that supports snaps
     const mmProvider = ethereum.providers.find((p: any) => p.isMetaMask);
     return mmProvider || ethereum.providers[0];
@@ -44,7 +44,7 @@ export function useQuantumRegistry() {
   const isFlaskAvailable = async (): Promise<boolean> => {
     const provider = getFlaskProvider();
     if (!provider) return false;
-    
+
     try {
       await provider.request({ method: 'wallet_getSnaps' });
       return true;
@@ -56,11 +56,11 @@ export function useQuantumRegistry() {
   // Check if an address is quantum-safe
   const checkQuantumSafe = useCallback(async (address: string): Promise<boolean> => {
     // Validate address format
-    if (!address || 
-        address === '0x' || 
-        address === '0x0000000000000000000000000000000000000000' ||
-        address.length < 42 ||
-        !address.startsWith('0x')) {
+    if (!address ||
+      address === '0x' ||
+      address === '0x0000000000000000000000000000000000000000' ||
+      address.length < 42 ||
+      !address.startsWith('0x')) {
       return false;
     }
 
@@ -75,14 +75,14 @@ export function useQuantumRegistry() {
         throw new Error('MetaMask Flask not found');
       }
       const provider = new ethers.BrowserProvider(flaskProvider, 'any');
-      
+
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
         REGISTRY_ABI,
         provider
       );
 
-      const isQuantumSafe = await registry.isQuantumSafe(address);
+      const isQuantumSafe = await registry.getFunction('isQuantumSafe').staticCall(address);
       setIsLoading(false);
       return isQuantumSafe;
     } catch (err: any) {
@@ -112,7 +112,7 @@ export function useQuantumRegistry() {
       }
       const provider = new ethers.BrowserProvider(flaskProvider, 'any');
       const signer = await provider.getSigner();
-      
+
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
         REGISTRY_ABI,
@@ -121,10 +121,10 @@ export function useQuantumRegistry() {
 
       // Convert hex string to bytes32
       // Remove '0x' prefix if present and ensure it's 64 hex chars (32 bytes)
-      const cleanHash = publicKeyHash.startsWith('0x') 
-        ? publicKeyHash.slice(2) 
+      const cleanHash = publicKeyHash.startsWith('0x')
+        ? publicKeyHash.slice(2)
         : publicKeyHash;
-      
+
       // Pad to 64 hex characters (32 bytes)
       const paddedHash = cleanHash.padStart(64, '0').slice(0, 64);
       const bytes32Hash = '0x' + paddedHash;
@@ -151,7 +151,7 @@ export function useQuantumRegistry() {
         return 0;
       }
       const provider = new ethers.BrowserProvider(flaskProvider, 'any');
-      
+
       const registry = new ethers.Contract(
         CONTRACTS.QUANTUM_REGISTRY,
         REGISTRY_ABI,

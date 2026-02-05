@@ -4,12 +4,22 @@
 
 // Contract addresses (will be updated after deployment)
 // Contract addresses (will be updated after deployment)
-export const CONTRACTS = {
-  ENTRYPOINT: '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // v0.7 EntryPoint
-  FACTORY: '0x9cF193e7d0b33A519eb78fFA319016803a19527F', // QuantumAccountFactory address
-  VERIFIER: '0x721211edc1201c6F3824989acaa9d1191CDc4e55', // MockGroth16Verifier address
-  PAYMASTER: '0xAEE572141f2f94A8284541D21F86ee7676aC060E', // HackathonPaymaster address
-  REGISTRY: '0x1c07c57026Cd6e639d2963A900C052b4A251d8B0', // QuantumRegistry address
+export const CONFIG = {
+  // Sepolia (Redeployed 2026-02-05 via Fool-Proof Reimplementation)
+  CHAIN_ID: 11155111,
+  RPC_URL: "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
+
+  // Addresses
+  QUANTUM_REGISTRY_ADDRESS: "0x8B579f2FCB65aC32d13Ddcd91a654627A91cBBDB",
+  QUANTUM_ACCOUNT_FACTORY_ADDRESS: "0x8db97C640Ea328dBADEDeb9215ab2a7B383DB4E2",
+  HACKATHON_PAYMASTER_ADDRESS: "0x2e2bCA633E42B798Fe2F419C720F9Ce30Ca5A816",
+  POOL_MANAGER_ADDRESS: "0x50Fd6a7496EB8c51e909CE7BEBa37f2eb004bA85",
+  QUANTUM_HOOK_ADDRESS: "0xc78627855471497a9B6b1047539879879c90ED24",
+  QUANTUM_POOL_ROUTER_ADDRESS: "0x03Ad1bcc7Ae183b645DabF2ec9B636c7ba0080f5",
+  ENTRYPOINT_ADDRESS: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+
+  // Bundler
+  BUNDLER_URL: "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7",
 };
 
 // Network configurations

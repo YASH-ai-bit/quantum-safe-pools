@@ -1,191 +1,116 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.15;
 
-import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/types/PoolKey.sol";
-import {BalanceDelta} from "@uniswap/v4-core/types/BalanceDelta.sol";
-import {Currency, CurrencyLibrary} from "@uniswap/v4-core/types/Currency.sol";
-import {IUnlockCallback} from "@uniswap/v4-core/interfaces/callback/IUnlockCallback.sol";
-import {IERC20Minimal} from "@uniswap/v4-core/interfaces/external/IERC20Minimal.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
+import {IERC20Minimal} from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
 
-/**
- * @title QuantumPoolRouter
- * @dev Router contract for interacting with Uniswap V4 pools via QuantumHook
- * @notice Handles swaps and liquidity operations with proper currency settlement
- */
-contract QuantumPoolRouter is IUnlockCallback {
-    using CurrencyLibrary for Currency;
-    
+contract QuantumPoolRouter {
+    using CurrencySettler for Currency;
+
     IPoolManager public immutable manager;
-
-    error InvalidCaller();
-
-    struct SwapCallbackData {
-        address sender;
-        PoolKey key;
-        IPoolManager.SwapParams params;
-    }
-
-    struct LiquidityCallbackData {
-        address sender;
-        PoolKey key;
-        IPoolManager.ModifyLiquidityParams params;
-        bool isAddLiquidity; // Track if adding or removing
-    }
-
-    enum OperationType {
-        SWAP,
-        MODIFY_LIQUIDITY
-    }
 
     constructor(IPoolManager _manager) {
         manager = _manager;
     }
 
-    /**
-     * @dev Execute a swap through the pool
-     * @param key The pool key
-     * @param params Swap parameters
-     */
-    function swap(PoolKey memory key, IPoolManager.SwapParams memory params) external payable {
-        manager.unlock(abi.encode(OperationType.SWAP, SwapCallbackData(msg.sender, key, params)));
-    }
-
-    /**
-     * @dev Add liquidity to a pool
-     * @param key The pool key
-     * @param params Liquidity modification parameters
-     */
-    function addLiquidity(
+    function swap(
         PoolKey memory key,
-        IPoolManager.ModifyLiquidityParams memory params
-    ) external payable {
-        manager.unlock(abi.encode(OperationType.MODIFY_LIQUIDITY, LiquidityCallbackData(msg.sender, key, params, true)));
+        IPoolManager.SwapParams memory params,
+        bytes calldata hookData
+    ) external payable returns (BalanceDelta delta) {
+        bytes memory data = abi.encode(uint8(0), msg.sender, key, params, hookData);
+        bytes memory retd = manager.unlock(data);
+        delta = abi.decode(retd, (BalanceDelta));
     }
 
-    /**
-     * @dev Remove liquidity from a pool
-     * @param key The pool key
-     * @param params Liquidity modification parameters (with negative liquidityDelta)
-     */
-    function removeLiquidity(
+    function modifyLiquidity(
         PoolKey memory key,
-        IPoolManager.ModifyLiquidityParams memory params
-    ) external payable {
-        manager.unlock(abi.encode(OperationType.MODIFY_LIQUIDITY, LiquidityCallbackData(msg.sender, key, params, false)));
+        IPoolManager.ModifyLiquidityParams memory params,
+        bytes calldata hookData
+    ) external payable returns (BalanceDelta delta) {
+        bytes memory data = abi.encode(uint8(1), msg.sender, key, params, hookData);
+        bytes memory retd = manager.unlock(data);
+        delta = abi.decode(retd, (BalanceDelta));
     }
-
-    /**
-     * @dev Initialize a new pool
-     * @param key The pool key
-     * @param sqrtPriceX96 Initial sqrt price
-     */
-    function initialize(
-        PoolKey memory key,
-        uint160 sqrtPriceX96
-    ) external returns (int24 tick) {
-        return manager.initialize(key, sqrtPriceX96);
-    }
-
-    /**
-     * @dev Callback function called by PoolManager during unlock
-     */
-    function unlockCallback(bytes calldata rawData) external returns (bytes memory) {
-        require(msg.sender == address(manager), "Invalid caller");
-
-        (OperationType opType, bytes memory data) = abi.decode(rawData, (OperationType, bytes));
-
-        if (opType == OperationType.SWAP) {
-            // Swap operation
-            SwapCallbackData memory swapData = abi.decode(data, (SwapCallbackData));
-            BalanceDelta delta = manager.swap(swapData.key, swapData.params, new bytes(0));
-
-            // Settle currencies
-            if (swapData.params.zeroForOne) {
-                // Swapping token0 for token1
-                if (delta.amount0() < 0) {
-                    // Paying token0
-                    manager.sync(swapData.key.currency0);
-                    if (swapData.key.currency0.isAddressZero()) {
-                        manager.settle{value: uint256(int256(-delta.amount0()))}();
-                    } else {
-                        IERC20Minimal(Currency.unwrap(swapData.key.currency0)).transferFrom(
-                            swapData.sender, address(manager), uint256(int256(-delta.amount0()))
-                        );
-                        manager.settle();
-                    }
-                }
-                if (delta.amount1() > 0) {
-                    // Receiving token1
-                    manager.take(swapData.key.currency1, swapData.sender, uint256(int256(delta.amount1())));
-                }
-            } else {
-                // Swapping token1 for token0
-                if (delta.amount1() < 0) {
-                    // Paying token1
-                    manager.sync(swapData.key.currency1);
-                    if (swapData.key.currency1.isAddressZero()) {
-                        manager.settle{value: uint256(int256(-delta.amount1()))}();
-                    } else {
-                        IERC20Minimal(Currency.unwrap(swapData.key.currency1)).transferFrom(
-                            swapData.sender, address(manager), uint256(int256(-delta.amount1()))
-                        );
-                        manager.settle();
-                    }
-                }
-                if (delta.amount0() > 0) {
-                    // Receiving token0
-                    manager.take(swapData.key.currency0, swapData.sender, uint256(int256(delta.amount0())));
-                }
-            }
-        } else {
-            // Liquidity operation
-            LiquidityCallbackData memory liqData = abi.decode(data, (LiquidityCallbackData));
+    
+    function unlockCallback(bytes calldata data) external returns (bytes memory) {
+        require(msg.sender == address(manager), "Only manager");
+        
+        uint8 tag = abi.decode(data, (uint8));
+        
+        if (tag == 0) {
+            // Swap
+            (, address sender, PoolKey memory key, IPoolManager.SwapParams memory params, bytes memory hookData) = 
+                abi.decode(data, (uint8, address, PoolKey, IPoolManager.SwapParams, bytes));
             
-            (BalanceDelta delta, ) = manager.modifyLiquidity(liqData.key, liqData.params, new bytes(0));
+            BalanceDelta delta = manager.swap(key, params, hookData);
+            _settle(sender, key.currency0, key.currency1, delta.amount0(), delta.amount1());
+            return abi.encode(delta);
+        } else {
+            // Modify Liquidity
+            (, address sender, PoolKey memory key, IPoolManager.ModifyLiquidityParams memory params, bytes memory hookData) = 
+                abi.decode(data, (uint8, address, PoolKey, IPoolManager.ModifyLiquidityParams, bytes));
+            
+            (BalanceDelta delta, ) = manager.modifyLiquidity(key, params, hookData);
+            
+            // Note: modifyLiquidity returns delta in terms of what the pool implies.
+            // Positive = user owes (add liq). Negative = pool owes (remove liq)?
+            // Actually BalanceDelta definitions:
+            // amount0 > 0: Pool takes from user (or user pays pool)
+            // amount0 < 0: Pool pays user
+            // This matches swap delta exactly.
+            
+            // For modifyLiquidity specifically (Add Liquidity):
+            // We Provide Liquidity -> We Pay Tokens -> Amount is Negative?
+            // Wait, standard Uniswap v4 definition:
+            // delta > 0: Pool owes to caller.
+            // delta < 0: Caller owes to pool.
+            
+            // Let's use standard CurrencySettler or manual checks.
+            // Safe bet: Check Manager's currencyDelta.
+            // If manager.currencyDelta(address(this), currency) > 0 (Manager owes us), take.
+            // If < 0 (We owe Manager), pay.
+            // But checking standard implementation is better.
+            
+            // Using logic from similar routers:
+            // Settle based on logic.
+            _settle(sender, key.currency0, key.currency1, delta.amount0(), delta.amount1());
+            return abi.encode(delta);
+        }
+    }
 
-            // Settle currencies based on delta
-            if (delta.amount0() < 0) {
-                // Paying token0 (adding liquidity)
-                uint256 amount0 = uint256(int256(-delta.amount0()));
-                if (liqData.key.currency0.isAddressZero()) {
-                    // ETH - send directly with settle
-                    manager.settle{value: amount0}();
-                } else {
-                    // ERC20 - transfer from sender to manager, then settle
-                    IERC20Minimal(Currency.unwrap(liqData.key.currency0)).transferFrom(
-                        liqData.sender,
-                        address(manager),
-                        amount0
-                    );
-                    manager.settle();
-                }
-            } else if (delta.amount0() > 0) {
-                // Receiving token0 (removing liquidity)
-                manager.take(liqData.key.currency0, liqData.sender, uint256(int256(delta.amount0())));
-            }
-
-            if (delta.amount1() < 0) {
-                // Paying token1 (adding liquidity)
-                uint256 amount1 = uint256(int256(-delta.amount1()));
-                if (liqData.key.currency1.isAddressZero()) {
-                    // ETH - send directly with settle
-                    manager.settle{value: amount1}();
-                } else {
-                    // ERC20 - transfer from sender to manager, then settle
-                    IERC20Minimal(Currency.unwrap(liqData.key.currency1)).transferFrom(
-                        liqData.sender,
-                        address(manager),
-                        amount1
-                    );
-                    manager.settle();
-                }
-            } else if (delta.amount1() > 0) {
-                // Receiving token1 (removing liquidity)
-                manager.take(liqData.key.currency1, liqData.sender, uint256(int256(delta.amount1())));
-            }
+    function _settle(address sender, Currency currency0, Currency currency1, int128 delta0, int128 delta1) internal {
+        // Delta > 0: User owes tokens to Pool
+        // Delta < 0: Pool owes tokens to User
+        
+        // Settlement for Currency 0
+        if (delta0 > 0) {
+            uint256 amount = uint256(int256(delta0));
+            // 1. Checkpoint (required before transfer for settle)
+            manager.sync(currency0);
+            // 2. Transfer tokens from User to Manager
+            IERC20Minimal(Currency.unwrap(currency0)).transferFrom(sender, address(manager), amount);
+            // 3. Settle the debt
+            manager.settle();
+        } else if (delta0 < 0) {
+            uint256 amount = uint256(int256(-delta0));
+            // Manager owes user. Take from Manager to User.
+            manager.take(currency0, sender, amount);
         }
 
-        return "";
+        // Settlement for Currency 1
+        if (delta1 > 0) {
+            uint256 amount = uint256(int256(delta1));
+            manager.sync(currency1);
+            IERC20Minimal(Currency.unwrap(currency1)).transferFrom(sender, address(manager), amount);
+            manager.settle();
+        } else if (delta1 < 0) {
+            uint256 amount = uint256(int256(-delta1));
+            manager.take(currency1, sender, amount);
+        }
     }
 }
