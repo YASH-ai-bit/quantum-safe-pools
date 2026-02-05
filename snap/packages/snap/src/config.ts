@@ -3,11 +3,13 @@
  */
 
 // Contract addresses (will be updated after deployment)
+// Contract addresses (will be updated after deployment)
 export const CONTRACTS = {
   ENTRYPOINT: '0x0000000071727De22E5E9d8BAf0edAc6f37da032', // v0.7 EntryPoint
-  FACTORY: '', // QuantumAccountFactory address
-  VERIFIER: '', // MockGroth16Verifier address
-  PAYMASTER: '', // HackathonPaymaster address
+  FACTORY: '0x9cF193e7d0b33A519eb78fFA319016803a19527F', // QuantumAccountFactory address
+  VERIFIER: '0x721211edc1201c6F3824989acaa9d1191CDc4e55', // MockGroth16Verifier address
+  PAYMASTER: '0xAEE572141f2f94A8284541D21F86ee7676aC060E', // HackathonPaymaster address
+  REGISTRY: '0x1c07c57026Cd6e639d2963A900C052b4A251d8B0', // QuantumRegistry address
 };
 
 // Network configurations

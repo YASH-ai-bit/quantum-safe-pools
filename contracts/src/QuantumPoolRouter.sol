@@ -30,6 +30,7 @@ contract QuantumPoolRouter is IUnlockCallback {
         address sender;
         PoolKey key;
         IPoolManager.ModifyLiquidityParams params;
+        bool isAddLiquidity; // Track if adding or removing
     }
 
     enum OperationType {
@@ -59,7 +60,7 @@ contract QuantumPoolRouter is IUnlockCallback {
         PoolKey memory key,
         IPoolManager.ModifyLiquidityParams memory params
     ) external payable {
-        manager.unlock(abi.encode(OperationType.MODIFY_LIQUIDITY, LiquidityCallbackData(msg.sender, key, params)));
+        manager.unlock(abi.encode(OperationType.MODIFY_LIQUIDITY, LiquidityCallbackData(msg.sender, key, params, true)));
     }
 
     /**
@@ -71,7 +72,7 @@ contract QuantumPoolRouter is IUnlockCallback {
         PoolKey memory key,
         IPoolManager.ModifyLiquidityParams memory params
     ) external payable {
-        manager.unlock(abi.encode(OperationType.MODIFY_LIQUIDITY, LiquidityCallbackData(msg.sender, key, params)));
+        manager.unlock(abi.encode(OperationType.MODIFY_LIQUIDITY, LiquidityCallbackData(msg.sender, key, params, false)));
     }
 
     /**
@@ -145,34 +146,42 @@ contract QuantumPoolRouter is IUnlockCallback {
 
             // Settle currencies based on delta
             if (delta.amount0() < 0) {
-                // Paying token0
-                manager.sync(liqData.key.currency0);
+                // Paying token0 (adding liquidity)
+                uint256 amount0 = uint256(int256(-delta.amount0()));
                 if (liqData.key.currency0.isAddressZero()) {
-                    manager.settle{value: uint256(int256(-delta.amount0()))}();
+                    // ETH - send directly with settle
+                    manager.settle{value: amount0}();
                 } else {
+                    // ERC20 - transfer from sender to manager, then settle
                     IERC20Minimal(Currency.unwrap(liqData.key.currency0)).transferFrom(
-                        liqData.sender, address(manager), uint256(int256(-delta.amount0()))
+                        liqData.sender,
+                        address(manager),
+                        amount0
                     );
                     manager.settle();
                 }
             } else if (delta.amount0() > 0) {
-                // Receiving token0
+                // Receiving token0 (removing liquidity)
                 manager.take(liqData.key.currency0, liqData.sender, uint256(int256(delta.amount0())));
             }
 
             if (delta.amount1() < 0) {
-                // Paying token1
-                manager.sync(liqData.key.currency1);
+                // Paying token1 (adding liquidity)
+                uint256 amount1 = uint256(int256(-delta.amount1()));
                 if (liqData.key.currency1.isAddressZero()) {
-                    manager.settle{value: uint256(int256(-delta.amount1()))}();
+                    // ETH - send directly with settle
+                    manager.settle{value: amount1}();
                 } else {
+                    // ERC20 - transfer from sender to manager, then settle
                     IERC20Minimal(Currency.unwrap(liqData.key.currency1)).transferFrom(
-                        liqData.sender, address(manager), uint256(int256(-delta.amount1()))
+                        liqData.sender,
+                        address(manager),
+                        amount1
                     );
                     manager.settle();
                 }
             } else if (delta.amount1() > 0) {
-                // Receiving token1
+                // Receiving token1 (removing liquidity)
                 manager.take(liqData.key.currency1, liqData.sender, uint256(int256(delta.amount1())));
             }
         }

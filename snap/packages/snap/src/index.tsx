@@ -832,22 +832,15 @@ async function handleBatchTransactions(
   const txCount = String(transactions.length);
   const shortAddress = accountAddress.slice(0, 20) + '...';
 
+  // Show minimal confirmation - MetaMask Snap UI is very strict
   const confirmed = await snap.request({
     method: 'snap_dialog',
     params: {
       type: 'confirmation',
       content: (
         <Box>
-          <Heading>Quantum-Safe Batch Transaction</Heading>
-          <Text>
-            Origin: <Bold>{origin}</Bold>
-          </Text>
-          <Text>
-            Executing {txCount} operations atomically
-          </Text>
-          <Divider />
-          <Text>From: {shortAddress}</Text>
-          <Text>Signed with Dilithium (Post-Quantum)</Text>
+          <Heading>Batch Transaction</Heading>
+          <Text>Approve multiple operations in one signature</Text>
         </Box>
       ),
     },
@@ -882,7 +875,7 @@ async function handleBatchTransactions(
   } else {
     // Check on-chain
     try {
-      isSafe = await isRegistered(provider, accountAddress);
+      isSafe = await isRegistered(accountAddress, provider);
       if (isSafe && currentState) {
         await snap.request({
           method: 'snap_manageState',

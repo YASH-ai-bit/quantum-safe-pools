@@ -167,7 +167,7 @@ export default function PoolDetail() {
     setError(null);
 
     try {
-      const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_POOL_ROUTER; // QuantumPoolRouter
 
       // Get token decimals
       const decimals0 = getTokenDecimals(pool.token0Symbol);
@@ -186,14 +186,14 @@ export default function PoolDetail() {
       // 1. Approve Tokens (skip for native ETH which is address(0))
       if (
         pool.poolKey.currency0 !==
-          "0x0000000000000000000000000000000000000000" &&
+        "0x0000000000000000000000000000000000000000" &&
         amount0Wei > 0n
       ) {
         await approveToken(pool.poolKey.currency0, ROUTER_ADDRESS, amount0Wei);
       }
       if (
         pool.poolKey.currency1 !==
-          "0x0000000000000000000000000000000000000000" &&
+        "0x0000000000000000000000000000000000000000" &&
         amount1Wei > 0n
       ) {
         await approveToken(pool.poolKey.currency1, ROUTER_ADDRESS, amount1Wei);
@@ -280,16 +280,16 @@ export default function PoolDetail() {
     setError(null);
 
     try {
-      const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680"; // QuantumPoolRouter
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_POOL_ROUTER; // QuantumPoolRouter
 
       const zeroForOne = swapTokenIn === "token0";
-      
+
       // Get correct decimals for the input token
       const tokenInSymbol = zeroForOne ? pool.token0Symbol : pool.token1Symbol;
       const decimalsIn = getTokenDecimals(tokenInSymbol);
-      
+
       console.log("[SWAP] Token in:", tokenInSymbol, "decimals:", decimalsIn);
-      
+
       const amountSpecified = parseUnits(swapAmountIn || "0", decimalsIn);
       const sqrtPriceLimitX96 = 0n; // No limit
 
@@ -398,11 +398,10 @@ export default function PoolDetail() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-3 border-b-2 transition pixel-text font-bold ${
-                  activeTab === tab
-                    ? "border-primary text-primary"
-                    : "border-transparent text-foreground/60 hover:text-foreground"
-                }`}
+                className={`px-6 py-3 border-b-2 transition pixel-text font-bold ${activeTab === tab
+                  ? "border-primary text-primary"
+                  : "border-transparent text-foreground/60 hover:text-foreground"
+                  }`}
               >
                 {tab.toUpperCase()}
               </button>
@@ -480,7 +479,7 @@ export default function PoolDetail() {
                         ))}
                         {accountAddress && (
                           <p className="text-sm mt-2">
-                            Send tokens to your Quantum Account:<br/>
+                            Send tokens to your Quantum Account:<br />
                             <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
                           </p>
                         )}
@@ -607,7 +606,7 @@ export default function PoolDetail() {
                         ))}
                         {accountAddress && (
                           <p className="text-sm mt-2">
-                            Send tokens to your Quantum Account:<br/>
+                            Send tokens to your Quantum Account:<br />
                             <code className="text-xs bg-black/50 px-1">{accountAddress}</code>
                           </p>
                         )}

@@ -56,12 +56,13 @@ export default function CreatePool() {
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string | null>(null); // Progress modal state
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const navigate = useNavigate();
   const { createPool, approveToken, addLiquidity, loading } =
     usePoolOperations();
   const { refetch: refetchWallet, tokenBalances } = useWalletData();
   const { refetch: refetchPools } = usePools();
-  const { isConnected, accountAddress, batchTransactions } = useSnap();
+  const { isConnected, accountAddress, sendTransaction } = useSnap();
 
   const tokens = [
     { symbol: "ETH", name: "Ethereum", address: TOKEN_ADDRESSES.ETH },
@@ -124,7 +125,6 @@ export default function CreatePool() {
     setTxHash(null);
     setIsSuccess(false);
     setStep(4); // Processing step
-    setProgressMessage("Preparing transactions...");
 
     try {
       // Validate balances first
@@ -175,7 +175,8 @@ export default function CreatePool() {
           : [tokenBObj.address, tokenAObj.address];
 
       // Router address
-      const ROUTER_ADDRESS = "0xdb5cAfC811403ECe235aFeD4396082EEBB214680";
+      // Router address
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_POOL_ROUTER;
 
       // Calculate liquidity delta (geometric mean for full range)
       const sqrtApprox = (a: bigint): bigint => {
@@ -199,11 +200,11 @@ export default function CreatePool() {
       if (isTokenA_ETH) ethValue = parsedAmountA;
       if (isTokenB_ETH) ethValue = parsedAmountB;
 
-      // Build transaction array for batch execution
-      setProgressMessage("Building batch transaction (4 operations in 1 signature)...");
       const { encodeFunctionData } = await import("viem");
+      const MAX_APPROVAL = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
-      // Transaction 1: Initialize pool
+      // Step 1: Initialize pool
+      setProgressMessage("Step 1/4: Initializing pool...");
       const initializeData = encodeFunctionData({
         abi: [
           {
@@ -239,21 +240,55 @@ export default function CreatePool() {
         ],
       });
 
-      // Transaction 2 & 3: Approve tokens (if not ETH)
-      const MAX_APPROVAL = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-      const approveAbi = [
-        {
-          name: "approve",
-          type: "function",
-          inputs: [
-            { name: "spender", type: "address" },
-            { name: "amount", type: "uint256" },
-          ],
-          outputs: [{ name: "success", type: "bool" }],
-        },
-      ];
+      await sendTransaction(ROUTER_ADDRESS, "0", initializeData);
+      console.log("[CREATE_POOL] Pool initialized");
 
-      // Transaction 4: Add liquidity
+      // Step 2: Approve Token A (if not ETH)
+      if (!isTokenA_ETH) {
+        setProgressMessage(`Step 2/4: Approving ${tokenA}...`);
+        const approveDataA = encodeFunctionData({
+          abi: [
+            {
+              name: "approve",
+              type: "function",
+              inputs: [
+                { name: "spender", type: "address" },
+                { name: "amount", type: "uint256" },
+              ],
+              outputs: [{ name: "success", type: "bool" }],
+            },
+          ],
+          functionName: "approve",
+          args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
+        });
+        await sendTransaction(tokenAObj.address, "0", approveDataA);
+        console.log(`[CREATE_POOL] ${tokenA} approved`);
+      }
+
+      // Step 3: Approve Token B (if not ETH)
+      if (!isTokenB_ETH) {
+        setProgressMessage(`Step 3/4: Approving ${tokenB}...`);
+        const approveDataB = encodeFunctionData({
+          abi: [
+            {
+              name: "approve",
+              type: "function",
+              inputs: [
+                { name: "spender", type: "address" },
+                { name: "amount", type: "uint256" },
+              ],
+              outputs: [{ name: "success", type: "bool" }],
+            },
+          ],
+          functionName: "approve",
+          args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
+        });
+        await sendTransaction(tokenBObj.address, "0", approveDataB);
+        console.log(`[CREATE_POOL] ${tokenB} approved`);
+      }
+
+      // Step 4: Add liquidity
+      setProgressMessage("Step 4/4: Adding liquidity...");
       const addLiquidityData = encodeFunctionData({
         abi: [
           {
@@ -303,58 +338,13 @@ export default function CreatePool() {
         ],
       });
 
-      // Build transactions array
-      const transactions: Array<{ to: string; value: string; data: string }> = [
-        // 1. Initialize pool
-        { to: ROUTER_ADDRESS, value: "0", data: initializeData },
-      ];
+      const result = await sendTransaction(ROUTER_ADDRESS, ethValue.toString(), addLiquidityData);
+      console.log("[CREATE_POOL] Liquidity added");
 
-      // 2. Approve token A (if not ETH)
-      if (!isTokenA_ETH) {
-        const approveDataA = encodeFunctionData({
-          abi: approveAbi,
-          functionName: "approve",
-          args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
-        });
-        transactions.push({ to: tokenAObj.address, value: "0", data: approveDataA });
-      }
-
-      // 3. Approve token B (if not ETH)
-      if (!isTokenB_ETH) {
-        const approveDataB = encodeFunctionData({
-          abi: approveAbi,
-          functionName: "approve",
-          args: [ROUTER_ADDRESS as `0x${string}`, MAX_APPROVAL],
-        });
-        transactions.push({ to: tokenBObj.address, value: "0", data: approveDataB });
-      }
-
-      // 4. Add liquidity
-      transactions.push({
-        to: ROUTER_ADDRESS,
-        value: ethValue.toString(),
-        data: addLiquidityData,
-      });
-
-      console.log("%c[CREATE_POOL] Batch transactions prepared:", "color: #00ffff;", transactions.length);
-      console.log("%c[CREATE_POOL] Operations:", "color: #00ffff;", [
-        "1. Initialize pool",
-        isTokenA_ETH ? null : "2. Approve " + tokenA,
-        isTokenB_ETH ? null : "3. Approve " + tokenB,
-        "4. Add liquidity",
-      ].filter(Boolean));
-
-      // Execute batch transaction (single signature!)
-      setProgressMessage("Please sign ONE transaction for all operations...");
-
-      const result = await batchTransactions(transactions);
-
-      console.log("%c[CREATE_POOL] Batch result:", "color: #00ff00;", result);
-
-      if (result?.success && result?.transactionHash) {
+      if (result?.transactionHash) {
         setTxHash(result.transactionHash);
         setIsSuccess(true);
-        setProgressMessage("Pool created with liquidity!");
+        setProgressMessage("Pool created successfully!");
 
         // Refresh data
         refetchPools();
@@ -364,10 +354,8 @@ export default function CreatePool() {
         setTimeout(() => {
           navigate("/pools");
         }, 3000);
-      } else if (result?.error) {
-        throw new Error(result.error);
       } else {
-        throw new Error("Batch transaction failed without error message");
+        throw new Error("Transaction failed");
       }
     } catch (err: any) {
       console.error("[CREATE_POOL] Error:", err);
@@ -407,22 +395,22 @@ export default function CreatePool() {
                 <div className="text-center">
                   <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
                   <h2 className="text-xl font-bold mb-4 pixel-text text-primary">
-                    🔐 Quantum-Safe Batch Transaction
+                    🔐 Creating Pool
                   </h2>
                   <p className="text-foreground/80 pixel-text mb-4">
                     {progressMessage}
                   </p>
                   <div className="text-left bg-black/50 border border-primary/30 p-4 mt-4">
-                    <p className="text-sm text-foreground/60 pixel-text mb-2">Operations in this batch:</p>
+                    <p className="text-sm text-foreground/60 pixel-text mb-2">Sequential operations:</p>
                     <ul className="text-sm text-foreground/80 pixel-text space-y-1">
-                      <li>✓ 1. Initialize pool</li>
-                      <li>✓ 2. Approve Token A</li>
-                      <li>✓ 3. Approve Token B</li>
-                      <li>✓ 4. Add liquidity</li>
+                      <li>1. Initialize pool</li>
+                      <li>2. Approve Token A</li>
+                      <li>3. Approve Token B</li>
+                      <li>4. Add liquidity</li>
                     </ul>
                   </div>
                   <p className="text-xs text-foreground/50 mt-4 pixel-text">
-                    All 4 operations in 1 quantum-safe signature!
+                    Each operation signed with quantum-safe Dilithium
                   </p>
                 </div>
               </div>
@@ -761,9 +749,12 @@ export default function CreatePool() {
                   <div className="flex items-start gap-3 p-4 border-2 border-primary bg-primary/5">
                     <input
                       type="checkbox"
+                      id="terms-checkbox"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
                       className="mt-1 w-4 h-4 border-2 border-primary"
                     />
-                    <label className="text-sm text-foreground/80 pixel-text">
+                    <label htmlFor="terms-checkbox" className="text-sm text-foreground/80 pixel-text cursor-pointer">
                       I understand that liquidity pools involve risks and I
                       accept the terms of service
                     </label>
@@ -781,7 +772,7 @@ export default function CreatePool() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || !isConnected || !balanceValidation.isValid}
+                    disabled={loading || !isConnected || !balanceValidation.isValid || !termsAccepted}
                     className="flex-1 py-3 border-2 border-primary text-primary font-bold hover:bg-primary hover:text-black transition-all flex items-center justify-center gap-2 pixel-text disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (
