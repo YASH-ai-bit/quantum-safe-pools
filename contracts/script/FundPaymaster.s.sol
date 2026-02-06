@@ -1,28 +1,24 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "../src/HackathonPaymaster.sol";
+
+interface IEntryPoint {
+    function depositTo(address account) external payable;
+}
 
 contract FundPaymaster is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
-        
-        // Address of the deployed paymaster
-        address payable paymasterAddress = payable(0x2e2bCA633E42B798Fe2F419C720F9Ce30Ca5A816);
-        
-        console.log("Funding Paymaster at:", paymasterAddress);
-        console.log("From account:", deployer);
+        address paymaster = 0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96;
+        address entryPoint = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
         vm.startBroadcast(deployerPrivateKey);
-
-        // Call deposit() on the paymaster with 0.05 ETH
-        // This forwards the ETH to the EntryPoint's deposit for the paymaster
-        HackathonPaymaster(paymasterAddress).deposit{value: 0.05 ether}();
         
-        console.log("Deposited 0.05 ETH to Paymaster via EntryPoint");
-
+        // Deposit 0.05 ETH to the EntryPoint for the Paymaster
+        IEntryPoint(entryPoint).depositTo{value: 0.05 ether}(paymaster);
+        
+        console.log("Deposited 0.05 ETH to EntryPoint for Paymaster:", paymaster);
         vm.stopBroadcast();
     }
 }

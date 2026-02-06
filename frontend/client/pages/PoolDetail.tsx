@@ -17,6 +17,7 @@ import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
 import { parseUnits, formatEther } from "viem";
+import { CONTRACTS } from "@shared/contracts";
 
 // Token decimals mapping (common tokens)
 const TOKEN_DECIMALS: Record<string, number> = {

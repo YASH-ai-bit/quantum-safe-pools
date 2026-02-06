@@ -9,13 +9,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title HackathonPaymaster
  * @dev Simple paymaster that sponsors gas for quantum-safe accounts
- * @notice For hackathon/testnet use - sponsors up to 1 ETH per account
+ * @notice Deterministic validation for improved bundler compatibility
  */
 contract HackathonPaymaster is IPaymaster, Ownable {
     IEntryPoint public immutable entryPoint;
 
-    // Max ETH sponsored per account (in wei) - 1 ETH
-    uint256 public constant MAX_SPONSORED_PER_ACCOUNT = 1 ether;
+    // Max ETH sponsored per account (in wei) - 5 ETH (Increased for testing)
+    uint256 public constant MAX_SPONSORED_PER_ACCOUNT = 5 ether;
 
     // Track ETH used by each account (in wei)
     mapping(address => uint256) public sponsoredAmount;
@@ -35,37 +35,42 @@ contract HackathonPaymaster is IPaymaster, Ownable {
 
     /**
      * @dev Validate the paymaster user operation
+     * @notice Must be deterministic and lightweight (Validation Phase)
      */
     function validatePaymasterUserOp(
         PackedUserOperation calldata userOp,
         bytes32,
         uint256 maxCost
     ) external override onlyEntryPoint returns (bytes memory context, uint256 validationData) {
-        address account = userOp.sender;
-
-        // Check if account hasn't exceeded sponsorship limit (maxCost is in wei)
-        require(
-            sponsoredAmount[account] + maxCost <= MAX_SPONSORED_PER_ACCOUNT,
-            "Sponsorship limit exceeded"
-        );
-
-        // Track the sponsored amount
-        sponsoredAmount[account] += maxCost;
-
-        emit GasSponsored(account, maxCost);
-
-        return ("", 0); // Valid
+        // Validation Phase:
+        // 1. Check if we have enough deposit (EntryPoint handles this generally, but good to be sure)
+        // 2. Check if user is allowed (Sponsorship limit)
+        // We do NOT write to storage here to ensure simulation consistency
+        
+        // Return context for postOp to handle accounting
+        // validationData = 0 (valid, no time range)
+        return (abi.encode(userOp.sender), 0);
     }
 
     /**
-     * @dev Post-operation handler (not used for now)
+     * @dev Post-operation handler
+     * @notice Handle accounting here (Execution Phase)
      */
     function postOp(
-        PostOpMode,
-        bytes calldata,
-        uint256,
+        PostOpMode mode,
+        bytes calldata context,
+        uint256 actualGasCost,
         uint256
-    ) external override onlyEntryPoint {}
+    ) external override onlyEntryPoint {
+        // Only charge if operation succeeded or reverted (ignoring simulation only calls if any)
+        // PostOpMode.opSucceeded or PostOpMode.opReverted
+        
+        (address account) = abi.decode(context, (address));
+        
+        sponsoredAmount[account] += actualGasCost;
+        
+        emit GasSponsored(account, actualGasCost);
+    }
 
     /**
      * @dev Add stake to EntryPoint

@@ -482,16 +482,16 @@ async function handleSendTransaction(origin: string, params: any) {
       try {
         const decoded = routerInterface.parseTransaction({ data });
         if (decoded) {
-          if (decoded.name === 'submitOrder') {
-            const [key, orderKey, amountIn] = decoded.args;
-            actionDescription = 'Submit TWAMM Order';
+          if (decoded.name === 'initializePoolSafe') {
+            const [key, sqrtPriceX96] = decoded.args;
+            actionDescription = 'Initialize Pool';
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> TWAMM Order</Text>
-                <Text><Bold>Pair:</Bold> {`${key[0].slice(0, 6)}... / ${key[1].slice(0, 6)}...`}</Text>
-                <Text><Bold>Amount In:</Bold> {amountIn.toString()}</Text>
-                <Text><Bold>Duration:</Bold> {orderKey[1].toString()}</Text>
-                <Text><Bold>Fee Tier:</Bold> {key[2].toString()} (Dynamic)</Text>
+                <Text><Bold>Action:</Bold> Initialize Pool (Quantum Safe)</Text>
+                <Text><Bold>Currency0:</Bold> {key[0].slice(0, 10)}...</Text>
+                <Text><Bold>Currency1:</Bold> {key[1].slice(0, 10)}...</Text>
+                <Text><Bold>Fee Tier:</Bold> {key[2].toString()}</Text>
+                <Text><Bold>Init Price:</Bold> {sqrtPriceX96.toString()}</Text>
               </Box>
             );
           } else if (decoded.name === 'modifyLiquidity') {

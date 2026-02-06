@@ -230,7 +230,7 @@ export function useSnap() {
             request: {
               method: "quantum_getAccountAddress",
               params: {
-                factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
+                factoryAddress: CONTRACTS.QUANTUM_SYSTEM,
                 rpcUrl: RPC_URLS.SEPOLIA,
               },
             },
@@ -315,7 +315,7 @@ export function useSnap() {
               to,
               value,
               data,
-              factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
+              factoryAddress: CONTRACTS.QUANTUM_SYSTEM,
               rpcUrl: RPC_URLS.SEPOLIA,
               chainId: CHAIN_ID.SEPOLIA,
               paymasterAddress: CONTRACTS.HACKATHON_PAYMASTER,
@@ -464,7 +464,7 @@ export function useSnap() {
             method: "quantum_batchTransactions",
             params: {
               transactions,
-              factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
+              factoryAddress: CONTRACTS.QUANTUM_SYSTEM,
               rpcUrl: RPC_URLS.SEPOLIA,
               chainId: CHAIN_ID.SEPOLIA,
               paymasterAddress: CONTRACTS.HACKATHON_PAYMASTER,

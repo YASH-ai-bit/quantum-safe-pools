@@ -77,7 +77,7 @@ export function useQuantumRegistry() {
       const provider = new ethers.BrowserProvider(flaskProvider, 'any');
 
       const registry = new ethers.Contract(
-        CONTRACTS.QUANTUM_REGISTRY,
+        CONTRACTS.QUANTUM_SYSTEM,
         REGISTRY_ABI,
         provider
       );
@@ -114,7 +114,7 @@ export function useQuantumRegistry() {
       const signer = await provider.getSigner();
 
       const registry = new ethers.Contract(
-        CONTRACTS.QUANTUM_REGISTRY,
+        CONTRACTS.QUANTUM_SYSTEM,
         REGISTRY_ABI,
         signer
       );
@@ -153,7 +153,7 @@ export function useQuantumRegistry() {
       const provider = new ethers.BrowserProvider(flaskProvider, 'any');
 
       const registry = new ethers.Contract(
-        CONTRACTS.QUANTUM_REGISTRY,
+        CONTRACTS.QUANTUM_SYSTEM,
         REGISTRY_ABI,
         provider
       );
