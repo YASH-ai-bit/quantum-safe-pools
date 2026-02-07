@@ -459,7 +459,6 @@ async function handleSendTransaction(origin: string, params: any) {
     paymasterAddress,
   });
 
-
   // Fetch gas prices from Pimlico bundler for accurate pricing
   const bundlerUrl =
     'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
@@ -487,21 +486,38 @@ async function handleSendTransaction(origin: string, params: any) {
             actionDescription = 'Create Pool';
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> Create Quantum Pool</Text>
-                <Text><Bold>Token A:</Bold> {tokenA}</Text>
-                <Text><Bold>Token B:</Bold> {tokenB}</Text>
+                <Text>
+                  <Bold>Action:</Bold> Create Quantum Pool
+                </Text>
+                <Text>
+                  <Bold>Token A:</Bold> {tokenA}
+                </Text>
+                <Text>
+                  <Bold>Token B:</Bold> {tokenB}
+                </Text>
               </Box>
             );
           } else if (decoded.name === 'addLiquidity') {
             actionDescription = 'Add Liquidity';
-            const [tokenA, tokenB, amountADesired, amountBDesired] = decoded.args;
+            const [tokenA, tokenB, amountADesired, amountBDesired] =
+              decoded.args;
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> Add Liquidity</Text>
-                <Text><Bold>Token A:</Bold> {tokenA}</Text>
-                <Text><Bold>Token B:</Bold> {tokenB}</Text>
-                <Text><Bold>Amount A:</Bold> {amountADesired.toString()}</Text>
-                <Text><Bold>Amount B:</Bold> {amountBDesired.toString()}</Text>
+                <Text>
+                  <Bold>Action:</Bold> Add Liquidity
+                </Text>
+                <Text>
+                  <Bold>Token A:</Bold> {tokenA}
+                </Text>
+                <Text>
+                  <Bold>Token B:</Bold> {tokenB}
+                </Text>
+                <Text>
+                  <Bold>Amount A:</Bold> {amountADesired.toString()}
+                </Text>
+                <Text>
+                  <Bold>Amount B:</Bold> {amountBDesired.toString()}
+                </Text>
               </Box>
             );
           } else if (decoded.name === 'removeLiquidity') {
@@ -509,10 +525,18 @@ async function handleSendTransaction(origin: string, params: any) {
             const [tokenA, tokenB, liquidity] = decoded.args;
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> Remove Liquidity</Text>
-                <Text><Bold>Token A:</Bold> {tokenA}</Text>
-                <Text><Bold>Token B:</Bold> {tokenB}</Text>
-                <Text><Bold>Liquidity Burned:</Bold> {liquidity.toString()}</Text>
+                <Text>
+                  <Bold>Action:</Bold> Remove Liquidity
+                </Text>
+                <Text>
+                  <Bold>Token A:</Bold> {tokenA}
+                </Text>
+                <Text>
+                  <Bold>Token B:</Bold> {tokenB}
+                </Text>
+                <Text>
+                  <Bold>Liquidity Burned:</Bold> {liquidity.toString()}
+                </Text>
               </Box>
             );
           } else if (decoded.name === 'swapExactTokensForTokens') {
@@ -520,10 +544,18 @@ async function handleSendTransaction(origin: string, params: any) {
             const [amountIn, amountOutMin, path] = decoded.args;
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> Swap</Text>
-                <Text><Bold>Amount In:</Bold> {amountIn.toString()}</Text>
-                <Text><Bold>Min Amount Out:</Bold> {amountOutMin.toString()}</Text>
-                <Text><Bold>Path:</Bold> {path.join(' -> ')}</Text>
+                <Text>
+                  <Bold>Action:</Bold> Swap
+                </Text>
+                <Text>
+                  <Bold>Amount In:</Bold> {amountIn.toString()}
+                </Text>
+                <Text>
+                  <Bold>Min Amount Out:</Bold> {amountOutMin.toString()}
+                </Text>
+                <Text>
+                  <Bold>Path:</Bold> {path.join(' -> ')}
+                </Text>
               </Box>
             );
           } else {
@@ -538,8 +570,12 @@ async function handleSendTransaction(origin: string, params: any) {
             actionDescription = `${decoded.name} (ERC20)`;
             detailedContent = (
               <Box>
-                <Text><Bold>Spender:</Bold> {decoded.args[0]}</Text>
-                <Text><Bold>Amount:</Bold> {decoded.args[1].toString()}</Text>
+                <Text>
+                  <Bold>Spender:</Bold> {decoded.args[0]}
+                </Text>
+                <Text>
+                  <Bold>Amount:</Bold> {decoded.args[1].toString()}
+                </Text>
               </Box>
             );
           }
@@ -621,16 +657,24 @@ async function handleSendTransaction(origin: string, params: any) {
 
   // Layer 1: Check persistent snap state
   if (state?.isRegistered === true) {
-    logYellow('Account marked as registered in snap state. Skipping registration batch.');
+    logYellow(
+      'Account marked as registered in snap state. Skipping registration batch.',
+    );
     isSafe = true;
   }
 
   // Layer 2: Check nonce if not already marked
   if (!isSafe) {
     try {
-      const pendingNonce = await getAccountNonce(accountAddress, provider, 'pending');
+      const pendingNonce = await getAccountNonce(
+        accountAddress,
+        provider,
+        'pending',
+      );
       if (pendingNonce > 0n) {
-        logYellow('Account has pending nonce > 0. Assuming registered.', { nonce: pendingNonce.toString() });
+        logYellow('Account has pending nonce > 0. Assuming registered.', {
+          nonce: pendingNonce.toString(),
+        });
         isSafe = true;
         // Also persist this for future calls
         await snap.request({
@@ -687,10 +731,10 @@ async function handleSendTransaction(origin: string, params: any) {
       [registerData, data || '0x'],
     );
   } else if (!isSafe && !deployed) {
-    logYellow('Account not deployed. Registration will be handled effectively by initCode (createAccount).');
+    logYellow(
+      'Account not deployed. Registration will be handled effectively by initCode (createAccount).',
+    );
   }
-
-
 
   // Construct UserOperation via SDK-optimized helper
   logYellow('Constructing UserOp for transaction...', { to, value, useBatch });
@@ -817,7 +861,8 @@ async function handleSendTransaction(origin: string, params: any) {
 
         // Check for UserOp execution success
         if (receipt.success === false) {
-          const reason = receipt.reason || 'Transaction reverted during execution';
+          const reason =
+            receipt.reason || 'Transaction reverted during execution';
           throw new Error(reason);
         }
 
@@ -836,10 +881,12 @@ async function handleSendTransaction(origin: string, params: any) {
       throw new Error('Transaction not confirmed after 2 minutes');
     }
 
-    // CRITICAL: If this was a batch transaction that included registration, 
+    // CRITICAL: If this was a batch transaction that included registration,
     // mark registration as complete in snap state to prevent future re-registration attempts
     if (useBatch) {
-      logYellow('Batch transaction confirmed. Marking account as registered in snap state.');
+      logYellow(
+        'Batch transaction confirmed. Marking account as registered in snap state.',
+      );
       const currentState = (await snap.request({
         method: 'snap_manageState',
         params: { operation: 'get' },
@@ -893,7 +940,11 @@ async function handleBatchTransactions(
     paymasterAddress,
   } = params;
 
-  if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+  if (
+    !transactions ||
+    !Array.isArray(transactions) ||
+    transactions.length === 0
+  ) {
     throw new Error('transactions array is required');
   }
 
@@ -918,7 +969,10 @@ async function handleBatchTransactions(
     provider,
   );
 
-  logYellow('Batch execution for account', { accountAddress, txCount: transactions.length });
+  logYellow('Batch execution for account', {
+    accountAddress,
+    txCount: transactions.length,
+  });
 
   // Show user confirmation dialog
   const txCount = String(transactions.length);
@@ -951,7 +1005,7 @@ async function handleBatchTransactions(
 
   logYellow('Batch encoded', {
     targets: targets.length,
-    callDataLength: batchCallData.length
+    callDataLength: batchCallData.length,
   });
 
   // Check if account is registered (for first-time users, include registration)
@@ -991,7 +1045,9 @@ async function handleBatchTransactions(
   // If not registered AND deployed, prepend registration to batch
   // (If not deployed, createAccount will handle it)
   if (!isSafe && deployed) {
-    logYellow('Account deployed but not registered. Adding registration to batch...');
+    logYellow(
+      'Account deployed but not registered. Adding registration to batch...',
+    );
 
     const registryInterface = new Interface([
       'function register(bytes32 publicKeyHash)',
@@ -1088,7 +1144,8 @@ async function handleBatchTransactions(
 
         // Check for UserOp execution success
         if (receipt.success === false) {
-          const reason = receipt.reason || 'Transaction reverted during execution';
+          const reason =
+            receipt.reason || 'Transaction reverted during execution';
           throw new Error(reason);
         }
 
