@@ -4,13 +4,14 @@
  */
 
 export const CONTRACTS = {
-  // Sepolia Testnet Addresses (Refactored Architecture v2.0.0)
-  QUANTUM_SYSTEM: "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
-  QUANTUM_AMM_FACTORY: "0xE5acFcC6bf0BB0f64204775526E033C76d2130a9",
-  QUANTUM_AMM_ROUTER: "0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722",
-  GROTH16_VERIFIER: "0x38078D4755172A9047B190CCE2eC614D242ACb77",
-  HACKATHON_PAYMASTER: "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96", // Keeping old paymaster if not redeployed, but trace didn't show it. Assuming same or need to update if user provides. User provided traces didn't show Paymaster. I will keep old one or ask? User didn't deploy paymaster in trace. I'll keep the old one for now to avoid breaking if it wasn't redeployed.
-  ENTRYPOINT: "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+  // Sepolia Testnet Addresses (Redeployed v2.1.0 with EntryPoint v0.7)
+  QUANTUM_SYSTEM: "0x767e77B89eDf0c4dBFf52b16Fe1Af2f5b2741125",
+  QUANTUM_AMM_FACTORY: "0xd3b17D6f91f52C3f4Fc8EAD3B708674114Eb60E5",
+  QUANTUM_AMM_ROUTER: "0x4b9a271cf38d28a32331fc2c7f3abfa54cea6edf",
+  GROTH16_VERIFIER: "0xAFDaEB7E4F1Ed1b352C3b927646F46a91cD3B97B",
+  QUANTUM_DYNAMIC_FEE_HOOK: "0x83f11c2e3c9845cf3ae5b06c07b486fb776c5f9d",
+  HACKATHON_PAYMASTER: "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96",
+  ENTRYPOINT: "0x0000000071727De22E5E9d8BAf0edAc6f37da032", // v0.7
 
   // Tokens (Sepolia) - Keeping same
   TOKENS: {
@@ -71,5 +72,6 @@ export function getContractAddresses(chainId: ChainId) {
     ENTRYPOINT: CONTRACTS.ENTRYPOINT,
     QUANTUM_AMM_FACTORY: CONTRACTS.QUANTUM_AMM_FACTORY,
     QUANTUM_AMM_ROUTER: CONTRACTS.QUANTUM_AMM_ROUTER,
+    QUANTUM_DYNAMIC_FEE_HOOK: CONTRACTS.QUANTUM_DYNAMIC_FEE_HOOK,
   };
 }

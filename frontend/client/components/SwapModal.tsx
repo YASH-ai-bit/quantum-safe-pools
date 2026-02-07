@@ -4,6 +4,8 @@ import { usePools } from "@/hooks/usePools";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useTransactionHistory } from "@/hooks/useTransactionHistory";
+import { useSnap } from "@/hooks/useSnap";
+import { CONTRACTS } from "@shared/contracts";
 import { parseUnits, formatUnits } from "viem";
 
 interface SwapModalProps {
@@ -22,6 +24,7 @@ export default function SwapModal({ isOpen, onClose }: SwapModalProps) {
     const { tokenBalances, refetch: refetchWallet } = useWalletData();
     const { swap } = usePoolOperations();
     const { addTransaction } = useTransactionHistory();
+    const { isConnected: snapConnected, accountAddress } = useSnap();
 
     // Available tokens from pools
     const [availableTokens, setAvailableTokens] = useState<TokenOption[]>([]);
@@ -324,8 +327,29 @@ export default function SwapModal({ isOpen, onClose }: SwapModalProps) {
                                 </div>
                                 <div className="flex justify-between text-sm pixel-text">
                                     <span className="text-foreground/60">Fee</span>
-                                    <span className="text-foreground">0.3%</span>
+                                    <span className="text-foreground flex items-center gap-2">
+                                        {snapConnected && accountAddress ? (
+                                            <>
+                                                <span className="text-green-400 font-bold">0.1%</span>
+                                                <span className="text-xs bg-green-500/20 text-green-400 px-1 py-0.5 rounded border border-green-500/30">
+                                                    Quantum Reg.
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span>0.3%</span>
+                                        )}
+                                    </span>
                                 </div>
+                                {snapConnected && accountAddress && (
+                                    <div className="flex justify-between text-xs pixel-text mt-3 p-2 bg-primary/10 border border-primary/30">
+                                        <span className="text-foreground/60 flex items-center gap-1">
+                                            🛡️ Privacy Hook
+                                        </span>
+                                        <span className="text-primary font-mono text-[10px] truncate max-w-[120px]" title={CONTRACTS?.QUANTUM_DYNAMIC_FEE_HOOK}>
+                                            {CONTRACTS?.QUANTUM_DYNAMIC_FEE_HOOK ? `${CONTRACTS.QUANTUM_DYNAMIC_FEE_HOOK.slice(0, 6)}...${CONTRACTS.QUANTUM_DYNAMIC_FEE_HOOK.slice(-4)}` : "Active"}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -361,6 +385,6 @@ export default function SwapModal({ isOpen, onClose }: SwapModalProps) {
                     </>
                 )}
             </div>
-        </div>
+        </div >
     );
 }
