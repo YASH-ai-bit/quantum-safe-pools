@@ -5,7 +5,7 @@ import { formatUnits } from "viem";
 import { sepolia } from "wagmi/chains";
 
 // Quantum AMM Types
-interface PoolKey {
+export interface PoolKey {
   currency0: string;
   currency1: string;
   fee: number;
@@ -13,7 +13,7 @@ interface PoolKey {
   hooks: string;
 }
 
-interface Pool {
+export interface Pool {
   id: string; // Pool Address
   poolKey: PoolKey;
   sqrtPriceX96: bigint;
@@ -193,7 +193,7 @@ export function usePools() {
   // Fetch pools details
   const fetchPools = useCallback(async () => {
     if (!publicClient || !poolsLength) {
-      if (poolsLength === 0n) setPools([]);
+      if (poolsLength === 0n && pools.length > 0) setPools([]);
       setLoading(false);
       return;
     }

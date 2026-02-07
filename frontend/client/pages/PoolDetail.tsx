@@ -17,6 +17,7 @@ import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
 import { useTransactionHistory, TransactionType } from "@/hooks/useTransactionHistory";
+import { useLPMetrics } from "@/hooks/useLPMetrics";
 import { parseUnits, formatUnits, formatEther } from "viem";
 import { CONTRACTS } from "@shared/contracts";
 import TransactionSuccessModal from "@/components/TransactionSuccessModal";
@@ -54,6 +55,19 @@ export default function PoolDetail() {
 
   // Find the pool from the pools array
   const pool = pools.find((p) => p.id === poolId);
+
+  // Get user's LP balance for this pool (Memoized early for hooks)
+  const userLpPosition = useMemo(() => {
+    if (!pool || !lpPositions) return null;
+    return lpPositions.find((lp) => lp.poolId.toLowerCase() === pool.id.toLowerCase());
+  }, [pool, lpPositions]);
+
+  const userLpBalance = useMemo(() => {
+    if (!userLpPosition) return 0n;
+    return userLpPosition.balance;
+  }, [userLpPosition]);
+
+  const metrics = useLPMetrics(pool, userLpBalance);
 
   // State for forms
   const [activeTab, setActiveTab] = useState<"add" | "remove" | "swap" | "overview">("add");
@@ -121,16 +135,7 @@ export default function PoolDetail() {
     return { isValid: errors.length === 0, errors };
   }, [pool, swapAmountIn, swapTokenIn, tokenBalances]);
 
-  // Get user's LP balance for this pool
-  const userLpPosition = useMemo(() => {
-    if (!pool || !lpPositions) return null;
-    return lpPositions.find((lp) => lp.poolId.toLowerCase() === pool.id.toLowerCase());
-  }, [pool, lpPositions]);
 
-  const userLpBalance = useMemo(() => {
-    if (!userLpPosition) return 0n;
-    return userLpPosition.balance;
-  }, [userLpPosition]);
 
   const userLpBalanceFormatted = useMemo(() => {
     return formatUnits(userLpBalance, 18);
@@ -602,6 +607,47 @@ export default function PoolDetail() {
                     </p>
                   </div>
                 </div>
+
+                {/* Investment Analysis */}
+                {userLpBalance > 0n && (
+                  <div className="p-6 border-2 border-primary bg-primary/5">
+                    <h3 className="text-xl font-bold text-primary mb-4">INVESTMENT_ANALYSIS</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">TOKENS_INVESTED</p>
+                        <p className="text-foreground font-bold text-sm">
+                          {metrics.investedAmount0.toFixed(4)} {pool.token0Symbol}
+                        </p>
+                        <p className="text-foreground font-bold text-sm">
+                          + {metrics.investedAmount1.toFixed(4)} {pool.token1Symbol}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">HODL_VALUE</p>
+                        <p className="text-foreground font-bold text-lg">
+                          ${metrics.hodlValueUSD.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-foreground/50">If you just held tokens</p>
+                      </div>
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">CURRENT_LP_VALUE</p>
+                        <p className="text-foreground font-bold text-lg">
+                          ${metrics.lpValueUSD.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-foreground/50">Market value of position</p>
+                      </div>
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">NET_EARNINGS</p>
+                        <p className={`font-bold text-lg ${metrics.netPnL >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                          {metrics.netPnL >= 0 ? '+' : ''}${metrics.netPnL.toFixed(2)}
+                        </p>
+                        <p className={`text-xs ${metrics.roi >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                          {metrics.roi.toFixed(2)}% (Fees + IL)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* User's LP Position */}
                 {userLpBalance > 0n && (

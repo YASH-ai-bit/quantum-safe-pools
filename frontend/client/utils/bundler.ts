@@ -99,7 +99,7 @@ export async function submitUserOpToBundler(
     jsonrpc: "2.0",
     id: 1,
     method: "eth_sendUserOperation",
-    params: [jsonUserOp, "0x0000000071727De22E5E9d8BAf0edAc6f37da032"],
+    params: [jsonUserOp, CONTRACTS.ENTRYPOINT],
   };
 
   try {

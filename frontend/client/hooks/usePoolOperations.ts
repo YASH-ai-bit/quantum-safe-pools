@@ -143,8 +143,11 @@ export function usePoolOperations() {
   const [snapLoading, setSnapLoading] = useState(false);
 
   // Hook for Snap - all operations go through quantum account
-  const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction, batchTransactions } =
+  const { isConnected: isSnapConnected, sendTransaction: sendSnapTransaction, batchTransactions, accountAddress: snapAddress } =
     useSnap();
+
+  // Use Snap address if connected (Smart Account), otherwise fallback to EOA (though we enforce Snap connection)
+  const recipientAddress = snapAddress || address;
 
   const createPool = useCallback(
     async (
@@ -241,7 +244,7 @@ export function usePoolOperations() {
             amountB,
             amountAMin,
             amountBMin,
-            address, // To user's Quantum Account (self)
+            recipientAddress as `0x${string}`, // To user's Quantum Account (self)
             deadline
           ],
         });
@@ -307,7 +310,7 @@ export function usePoolOperations() {
             liquidity,
             amountAMin,
             amountBMin,
-            address,
+            recipientAddress as `0x${string}`,
             deadline
           ],
         });
@@ -358,7 +361,7 @@ export function usePoolOperations() {
             amountIn,
             amountOutMin,
             path,
-            address,
+            recipientAddress as `0x${string}`,
             deadline
           ],
         });
@@ -510,7 +513,7 @@ export function usePoolOperations() {
             amountB,
             0n, // Min 0 for initial
             0n,
-            address, // to
+            recipientAddress as `0x${string}`, // to
             deadline
           ]
         });

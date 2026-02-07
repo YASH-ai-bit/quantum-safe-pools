@@ -9,7 +9,7 @@ import { usePools } from "@/hooks/usePools";
 import { useTransactionHistory } from "@/hooks/useTransactionHistory";
 import { usePublicClient } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
-import SwapModal from "@/components/SwapModal";
+import SwapModal from "@/components/SwapModal.tsx";
 
 export default function Dashboard() {
   const [hideBalance, setHideBalance] = useState(false);
@@ -264,14 +264,22 @@ export default function Dashboard() {
                         <p className="font-semibold text-foreground">{getTypeLabel(tx.type)}</p>
                         <p className="text-foreground/60 text-sm">
                           {tx.details.fromToken && tx.details.toToken
-                            ? `${tx.details.fromToken} → ${tx.details.toToken}`
+                            ? (tx.type === "add_liquidity" || tx.type === "remove_liquidity"
+                              ? `${tx.details.fromToken} + ${tx.details.toToken}`
+                              : `${tx.details.fromToken} → ${tx.details.toToken}`)
                             : tx.details.fromToken || "Transaction"}
                         </p>
                       </div>
                     </div>
                     <div className="text-right pixel-text">
                       <p className="font-semibold text-foreground">
-                        {tx.details.fromAmount ? `${tx.details.fromAmount} ${tx.details.fromToken || ""}` : "—"}
+                        {tx.type === "add_liquidity" && tx.details.toAmount ? (
+                          <span className="text-xs">
+                            {tx.details.fromAmount} {tx.details.fromToken} + {tx.details.toAmount} {tx.details.toToken}
+                          </span>
+                        ) : (
+                          tx.details.fromAmount ? `${tx.details.fromAmount} ${tx.details.fromToken || ""}` : "—"
+                        )}
                       </p>
                       <p className="text-foreground/60 text-sm">{formatTime(tx.timestamp)}</p>
                     </div>
