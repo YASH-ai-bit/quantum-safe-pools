@@ -6,13 +6,23 @@ import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
+import { useTransactionHistory } from "@/hooks/useTransactionHistory";
 import { usePublicClient } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
+import SwapModal from "@/components/SwapModal";
 
 export default function Dashboard() {
   const [hideBalance, setHideBalance] = useState(false);
-  const { totalBalance, portfolioChange, volume24h, poolsJoined, tokenBalances, loading: walletLoading } = useWalletData();
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const { totalBalance, portfolioChange, lpPositions, tokenBalances, loading: walletLoading } = useWalletData();
   const { pools, loading: poolsLoading } = usePools();
+  const { getRecentTransactions, formatTime, getTypeLabel } = useTransactionHistory();
+
+  // Calculate total liquidity provided from LP positions
+  const totalLiquidityProvided = lpPositions.reduce((sum, pos) => sum + parseFloat(pos.value || '0'), 0).toFixed(2);
+
+  // Get recent transactions from localStorage
+  const recentTransactions = getRecentTransactions(10);
 
   // Generate portfolio chart data (simplified - would need historical data)
   const portfolioData = [
@@ -27,15 +37,12 @@ export default function Dashboard() {
   const totalValue = parseFloat(totalBalance) || 0;
   const allocationData = tokenBalances.length > 0
     ? tokenBalances.map(token => ({
-        name: token.name,
-        value: totalValue > 0 ? Math.round((parseFloat(token.value.replace('$', '').replace(',', '')) / totalValue) * 100) : 0,
-      }))
+      name: token.name,
+      value: totalValue > 0 ? Math.round((parseFloat(token.value.replace('$', '').replace(',', '')) / totalValue) * 100) : 0,
+    }))
     : [{ name: "No Assets", value: 100 }];
 
   const colors = ["#00ff00", "#00ff00", "#00ff00", "#00ff00"];
-
-  // Recent transactions (would need to fetch from chain)
-  const recentTransactions: Array<{ id: number; type: string; asset: string; amount: string; date: string; status: string }> = [];
 
   // Assets from token balances
   const assets = tokenBalances.map((token, index) => ({
@@ -87,12 +94,13 @@ export default function Dashboard() {
                 </p>
 
                 <div className="flex gap-4 pt-6 border-t-2 border-primary">
-                  <Link to="/pools">
-                    <button className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-semibold hover:bg-primary/80 transition-all pixel-text border border-primary glitch-hover">
-                      <Send className="w-4 h-4" />
-                      SWAP
-                    </button>
-                  </Link>
+                  <button
+                    onClick={() => setIsSwapModalOpen(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-semibold hover:bg-primary/80 transition-all pixel-text border border-primary glitch-hover"
+                  >
+                    <Send className="w-4 h-4" />
+                    SWAP
+                  </button>
                   <button className="flex items-center gap-2 px-6 py-3 border-2 border-primary text-primary hover:bg-primary/10 font-semibold transition-all pixel-text glitch-hover">
                     <Download className="w-4 h-4" />
                     DEPOSIT
@@ -114,19 +122,11 @@ export default function Dashboard() {
                 )}
               </div>
               <div className="secondary-border p-6 glitch-hover">
-                <p className="text-foreground/60 text-sm mb-2 pixel-text">$ 24H_VOLUME</p>
+                <p className="text-foreground/60 text-sm mb-2 pixel-text">$ LIQUIDITY_PROVIDED</p>
                 {walletLoading ? (
                   <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
                 ) : (
-                  <p className="text-3xl font-bold text-foreground pixel-text">${volume24h || '0.00'}</p>
-                )}
-              </div>
-              <div className="secondary-border p-6 glitch-hover">
-                <p className="text-foreground/60 text-sm mb-2 pixel-text">$ POOLS_JOINED</p>
-                {walletLoading ? (
-                  <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-                ) : (
-                  <p className="text-3xl font-bold text-foreground pixel-text">{poolsJoined || 0}</p>
+                  <p className="text-3xl font-bold text-foreground pixel-text">${totalLiquidityProvided}</p>
                 )}
               </div>
             </div>
@@ -251,25 +251,32 @@ export default function Dashboard() {
             <div className="space-y-4">
               {recentTransactions.length > 0 ? (
                 recentTransactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-4 tertiary-border glitch-hover">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 border-2 border-primary">
-                      {tx.type === "Swap" && <Send className="w-5 h-5 text-primary" />}
-                      {tx.type === "Deposit" && <Download className="w-5 h-5 text-primary" />}
-                      {tx.type === "Liquidity" && <BarChart3 className="w-5 h-5 text-primary" />}
-                      {tx.type === "Withdrawal" && <Send className="w-5 h-5 text-red-500" />}
+                  <div key={tx.id} className="flex items-center justify-between p-4 tertiary-border glitch-hover">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 border-2 border-primary">
+                        {tx.type === "swap" && <Send className="w-5 h-5 text-primary" />}
+                        {tx.type === "add_liquidity" && <Download className="w-5 h-5 text-primary" />}
+                        {tx.type === "remove_liquidity" && <BarChart3 className="w-5 h-5 text-red-500" />}
+                        {tx.type === "approve" && <DollarSign className="w-5 h-5 text-primary" />}
+                        {tx.type === "create_pool" && <BarChart3 className="w-5 h-5 text-primary" />}
+                      </div>
+                      <div className="pixel-text">
+                        <p className="font-semibold text-foreground">{getTypeLabel(tx.type)}</p>
+                        <p className="text-foreground/60 text-sm">
+                          {tx.details.fromToken && tx.details.toToken
+                            ? `${tx.details.fromToken} → ${tx.details.toToken}`
+                            : tx.details.fromToken || "Transaction"}
+                        </p>
+                      </div>
                     </div>
-                    <div className="pixel-text">
-                      <p className="font-semibold text-foreground">{tx.type}</p>
-                      <p className="text-foreground/60 text-sm">{tx.asset}</p>
+                    <div className="text-right pixel-text">
+                      <p className="font-semibold text-foreground">
+                        {tx.details.fromAmount ? `${tx.details.fromAmount} ${tx.details.fromToken || ""}` : "—"}
+                      </p>
+                      <p className="text-foreground/60 text-sm">{formatTime(tx.timestamp)}</p>
                     </div>
                   </div>
-                  <div className="text-right pixel-text">
-                    <p className="font-semibold text-foreground">{tx.amount}</p>
-                    <p className="text-foreground/60 text-sm">{tx.date}</p>
-                  </div>
-                </div>
-              ))
+                ))
               ) : (
                 <div className="text-center py-8 text-foreground/60 pixel-text">
                   No recent transactions
@@ -279,6 +286,9 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Swap Modal */}
+      <SwapModal isOpen={isSwapModalOpen} onClose={() => setIsSwapModalOpen(false)} />
 
       <Footer />
     </div>

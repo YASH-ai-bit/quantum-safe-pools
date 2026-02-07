@@ -5,7 +5,7 @@ export function usePlatformStats() {
   const { pools, loading } = usePools();
   const [stats, setStats] = useState({
     totalTVL: '0',
-    activeUsers: '0',
+    avgAPY: '0%',
     liquidityPools: '0',
     uptime: '99.99%', // This would come from monitoring service
   });
@@ -16,6 +16,13 @@ export function usePlatformStats() {
       const totalTVL = pools.reduce((sum, pool) => {
         return sum + parseFloat(pool.tvl || '0');
       }, 0);
+
+      // Calculate average APY
+      const totalAPY = pools.reduce((sum, pool) => {
+        const apy = parseFloat(pool.apy?.replace('%', '') || '0');
+        return sum + apy;
+      }, 0);
+      const avgAPY = pools.length > 0 ? (totalAPY / pools.length).toFixed(2) : '0';
 
       // Format TVL
       let tvlFormatted = '0';
@@ -31,14 +38,14 @@ export function usePlatformStats() {
 
       setStats({
         totalTVL: tvlFormatted,
-        activeUsers: '0', // Would need to track unique addresses from events
+        avgAPY: `${avgAPY}%`,
         liquidityPools: pools.length.toString(),
         uptime: '99.99%',
       });
     } else if (!loading) {
       setStats({
         totalTVL: '0',
-        activeUsers: '0',
+        avgAPY: '0%',
         liquidityPools: '0',
         uptime: '99.99%',
       });

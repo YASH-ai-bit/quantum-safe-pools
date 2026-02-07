@@ -17,9 +17,8 @@ export default function Pools() {
 
   // Calculate aggregate stats
   const totalTVL = pools.reduce((sum, pool) => sum + parseFloat(pool.tvl || '0'), 0);
-  const totalVolume = pools.reduce((sum, pool) => sum + parseFloat(pool.volume24h || '0'), 0);
-  const avgAPY = pools.length > 0 
-    ? pools.reduce((sum, pool) => sum + parseFloat(pool.apy || '0'), 0) / pools.length 
+  const avgAPY = pools.length > 0
+    ? pools.reduce((sum, pool) => sum + parseFloat(pool.apy || '0'), 0) / pools.length
     : 0;
 
   const filteredPools = pools.filter((pool) => {
@@ -72,17 +71,11 @@ export default function Pools() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div className="secondary-border p-6 text-center glitch-hover">
               <p className="text-foreground/60 text-sm mb-2 pixel-text">$ TVL</p>
               <p className="text-3xl font-bold text-foreground pixel-text">
                 {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `$${totalTVL.toFixed(2)}`}
-              </p>
-            </div>
-            <div className="secondary-border p-6 text-center glitch-hover">
-              <p className="text-foreground/60 text-sm mb-2 pixel-text">$ VOLUME</p>
-              <p className="text-3xl font-bold text-foreground pixel-text">
-                {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `$${totalVolume.toFixed(2)}`}
               </p>
             </div>
             <div className="secondary-border p-6 text-center glitch-hover">
@@ -146,14 +139,6 @@ export default function Pools() {
                         <span className="text-foreground/60">apy</span>
                         <span className="font-bold text-primary">{pool.apy || '0.00'}%</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-foreground/60">24h_vol</span>
-                        <span className="font-bold text-foreground">${pool.volume24h || '0.00'}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-foreground/60">fees_24h</span>
-                        <span className="font-bold text-foreground">${pool.fees24h || '0.00'}</span>
-                      </div>
                     </div>
 
                     {/* Action Button */}
@@ -174,8 +159,8 @@ export default function Pools() {
               <BarChart3 className="w-12 h-12 text-foreground/40 mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2 pixel-text text-foreground">NO_POOLS_FOUND</h3>
               <p className="text-foreground/60 pixel-text">
-                {pools.length === 0 
-                  ? "No pools created yet. " 
+                {pools.length === 0
+                  ? "No pools created yet. "
                   : "Try adjusting your search or "}
                 <Link to="/create-pool" className="text-primary hover:text-primary/80 transition">
                   create a new pool
