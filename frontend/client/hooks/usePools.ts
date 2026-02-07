@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useReadContract, usePublicClient } from "wagmi";
 import { CONTRACTS } from "@shared/contracts";
-import { formatUnits, keccak256, encodePacked, pad, toHex, hexToBigInt, slice } from "viem";
+import { formatUnits } from "viem";
 import { sepolia } from "wagmi/chains";
 
-// Uniswap V4 Types
+// Quantum AMM Types
 interface PoolKey {
   currency0: string;
   currency1: string;
@@ -14,7 +14,7 @@ interface PoolKey {
 }
 
 interface Pool {
-  id: string;
+  id: string; // Pool Address
   poolKey: PoolKey;
   sqrtPriceX96: bigint;
   tick: number;
@@ -27,19 +27,60 @@ interface Pool {
   apy: string;
   token0Symbol: string;
   token1Symbol: string;
+  reserve0: bigint;
+  reserve1: bigint;
 }
 
-// POOLS_SLOT in PoolManager is 6 (see PoolManager.sol: mapping(PoolId id => Pool.State) internal _pools)
-const POOLS_SLOT = 6n;
-
-// PoolManager ABI with extsload for V4 state reading
-const POOL_MANAGER_ABI = [
+// QuantumAMMFactory ABI
+const QUANTUM_AMM_FACTORY_ABI = [
   {
-    name: "extsload",
+    name: "allPoolsLength",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "slot", type: "bytes32" }],
-    outputs: [{ name: "", type: "bytes32" }],
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "allPools",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
+
+// QuantumAMMPool ABI
+const QUANTUM_AMM_POOL_ABI = [
+  {
+    name: "token0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "token1",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "getReserves",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "reserve0", type: "uint256" },
+      { name: "reserve1", type: "uint256" },
+    ],
+  },
+  {
+    name: "totalSupply",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
 
@@ -68,86 +109,18 @@ const ERC20_ABI = [
   },
 ] as const;
 
-// QuantumHook ABI for registry functions
-const QUANTUM_HOOK_ABI = [
-  {
-    name: "getRegisteredPools",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "bytes32[]" }],
-  },
-  {
-    name: "getPoolKey",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "poolId", type: "bytes32" }],
-    outputs: [
-      {
-        name: "",
-        type: "tuple",
-        components: [
-          { name: "currency0", type: "address" },
-          { name: "currency1", type: "address" },
-          { name: "fee", type: "uint24" },
-          { name: "tickSpacing", type: "int24" },
-          { name: "hooks", type: "address" },
-        ],
-      },
-    ],
-  },
-] as const;
-
 /**
- * Calculate the storage slot for pool state in PoolManager
- * Pool state is stored at: keccak256(abi.encode(poolId, POOLS_SLOT))
+ * Calculate price from reserves
+ * price = reserve1 / reserve0
  */
-function getPoolStateBaseSlot(poolId: `0x${string}`): `0x${string}` {
-  // Mapping slot = keccak256(key . slot)
-  // For pool mapping: keccak256(poolId (32 bytes) ++ POOLS_SLOT (32 bytes))
-  const slotData = (poolId + pad(toHex(POOLS_SLOT), { size: 32 }).slice(2)) as `0x${string}`;
-  return keccak256(slotData);
-}
+function calculatePriceFromReserves(reserve0: bigint, reserve1: bigint, decimals0: number, decimals1: number): number {
+  if (reserve0 === 0n) return 0;
 
-/**
- * Decode Slot0 from raw bytes32 value
- * Slot0 layout: | sqrtPriceX96 (160 bits) | tick (24 bits) | protocolFee (24 bits) | lpFee (24 bits) |
- * Actually in V4, Slot0 is packed as: sqrtPriceX96 (160) | tick (24) | protocolFee (24) | lpFee (24)
- * Total: 232 bits, fits in one slot
- */
-function decodeSlot0(slot0Raw: `0x${string}`): { sqrtPriceX96: bigint; tick: number; protocolFee: number; lpFee: number } {
-  const value = hexToBigInt(slot0Raw);
+  // Format to standard units first
+  const r0 = Number(formatUnits(reserve0, decimals0));
+  const r1 = Number(formatUnits(reserve1, decimals1));
 
-  // Extract fields from packed data (right to left, LSB first)
-  const lpFee = Number(value & 0xFFFFFFn);           // 24 bits
-  const protocolFee = Number((value >> 24n) & 0xFFFFFFn);  // 24 bits
-  const tick = Number((value >> 48n) & 0xFFFFFFn);   // 24 bits (signed)
-  const sqrtPriceX96 = (value >> 72n) & ((1n << 160n) - 1n); // 160 bits
-
-  // Convert tick to signed int24
-  const signedTick = tick > 0x7FFFFF ? tick - 0x1000000 : tick;
-
-  return { sqrtPriceX96, tick: signedTick, protocolFee, lpFee };
-}
-
-/**
- * Calculate price from sqrtPriceX96
- * price = (sqrtPriceX96 / 2^96)^2
- */
-function calculatePrice(sqrtPriceX96: bigint, decimals0: number, decimals1: number): number {
-  if (sqrtPriceX96 === 0n) return 0;
-
-  // price = (sqrtPriceX96 / 2^96)^2 = sqrtPriceX96^2 / 2^192
-  const Q96 = 2n ** 96n;
-  const numerator = sqrtPriceX96 * sqrtPriceX96;
-  const denominator = Q96 * Q96;
-
-  // Adjust for decimals: price * 10^(decimals0 - decimals1)
-  const decimalAdjustment = 10 ** (decimals0 - decimals1);
-
-  // Convert to number for display
-  const priceRaw = Number(numerator * BigInt(Math.floor(decimalAdjustment * 1e18)) / denominator) / 1e18;
-  return priceRaw;
+  return r1 / r0;
 }
 
 export function usePools() {
@@ -156,26 +129,19 @@ export function usePools() {
   const [error, setError] = useState<string | null>(null);
   const publicClient = usePublicClient({ chainId: sepolia.id });
 
-  // Fetch pool IDs from on-chain registry (instant, no log scanning!)
-  const { data: poolIds, isLoading: isLoadingPools } = useReadContract({
-    address: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
-    abi: QUANTUM_HOOK_ABI,
-    functionName: "getRegisteredPools",
+  // Fetch pool count from Factory
+  const { data: poolsLength, isLoading: isLoadingPoolsLength } = useReadContract({
+    address: (CONTRACTS?.QUANTUM_AMM_FACTORY || "0xE5acFcC6bf0BB0f64204775526E033C76d2130a9") as `0x${string}`,
+    abi: QUANTUM_AMM_FACTORY_ABI,
+    functionName: "allPoolsLength",
     chainId: sepolia.id,
   });
 
   // Fetch token symbol
   const fetchTokenSymbol = useCallback(
     async (address: string): Promise<string> => {
-      if (
-        !address ||
-        address === "0x0000000000000000000000000000000000000000"
-      ) {
-        return "ETH";
-      }
-
+      if (!address || address === "0x0000000000000000000000000000000000000000") return "ETH";
       if (!publicClient) return address.slice(0, 6);
-
       try {
         const symbol = (await publicClient.readContract({
           address: address as `0x${string}`,
@@ -193,15 +159,8 @@ export function usePools() {
   // Fetch token decimals
   const fetchTokenDecimals = useCallback(
     async (address: string): Promise<number> => {
-      if (
-        !address ||
-        address === "0x0000000000000000000000000000000000000000"
-      ) {
-        return 18; // ETH decimals
-      }
-
+      if (!address || address === "0x0000000000000000000000000000000000000000") return 18;
       if (!publicClient) return 18;
-
       try {
         const decimals = (await publicClient.readContract({
           address: address as `0x${string}`,
@@ -216,96 +175,10 @@ export function usePools() {
     [publicClient],
   );
 
-  // Fetch token balance in PoolManager
-  const fetchPoolBalance = useCallback(
-    async (tokenAddress: string): Promise<bigint> => {
-      if (
-        !tokenAddress ||
-        tokenAddress === "0x0000000000000000000000000000000000000000"
-      ) {
-        // For ETH, get PoolManager ETH balance
-        if (!publicClient) return 0n;
-        try {
-          const balance = await publicClient.getBalance({
-            address: CONTRACTS.POOL_MANAGER as `0x${string}`,
-          });
-          return balance;
-        } catch {
-          return 0n;
-        }
-      }
-
-      if (!publicClient) return 0n;
-
-      try {
-        const balance = (await publicClient.readContract({
-          address: tokenAddress as `0x${string}`,
-          abi: ERC20_ABI,
-          functionName: "balanceOf",
-          args: [CONTRACTS.POOL_MANAGER as `0x${string}`],
-        } as any)) as bigint;
-        return balance;
-      } catch {
-        return 0n;
-      }
-    },
-    [publicClient],
-  );
-
-  // Fetch pool state using extsload
-  const fetchPoolState = useCallback(
-    async (poolId: `0x${string}`): Promise<{ sqrtPriceX96: bigint; tick: number; liquidity: bigint }> => {
-      if (!publicClient) {
-        return { sqrtPriceX96: 0n, tick: 0, liquidity: 0n };
-      }
-
-      try {
-        // Calculate base slot for this pool
-        const baseSlot = getPoolStateBaseSlot(poolId);
-
-        // Slot0 is at baseSlot + 0
-        // Liquidity is at baseSlot + 1 (or different offset in V4)
-        const slot0Result = (await publicClient.readContract({
-          address: CONTRACTS.POOL_MANAGER as `0x${string}`,
-          abi: POOL_MANAGER_ABI,
-          functionName: "extsload",
-          args: [baseSlot],
-        } as any)) as `0x${string}`;
-
-        // Decode Slot0
-        const { sqrtPriceX96, tick } = decodeSlot0(slot0Result);
-
-        // Liquidity is typically at baseSlot + 3 in V4 Pool.State struct
-        // struct State { Slot0 slot0; uint256 feeGrowthGlobal0X128; uint256 feeGrowthGlobal1X128; uint128 liquidity; }
-        const liquiditySlot = toHex(hexToBigInt(baseSlot) + 3n, { size: 32 });
-        const liquidityResult = (await publicClient.readContract({
-          address: CONTRACTS.POOL_MANAGER as `0x${string}`,
-          abi: POOL_MANAGER_ABI,
-          functionName: "extsload",
-          args: [liquiditySlot as `0x${string}`],
-        } as any)) as `0x${string}`;
-
-        const liquidity = hexToBigInt(liquidityResult) & ((1n << 128n) - 1n); // uint128
-
-        console.log(`[POOLS] Pool ${poolId.slice(0, 10)}... state:`, {
-          sqrtPriceX96: sqrtPriceX96.toString(),
-          tick,
-          liquidity: liquidity.toString(),
-        });
-
-        return { sqrtPriceX96, tick, liquidity };
-      } catch (err) {
-        console.error("Error fetching pool state:", err);
-        return { sqrtPriceX96: 0n, tick: 0, liquidity: 0n };
-      }
-    },
-    [publicClient],
-  );
-
-  // Fetch pool details for each pool ID from registry
+  // Fetch pools details
   const fetchPools = useCallback(async () => {
-    if (!publicClient || !poolIds || poolIds.length === 0) {
-      setPools([]);
+    if (!publicClient || !poolsLength) {
+      if (poolsLength === 0n) setPools([]);
       setLoading(false);
       return;
     }
@@ -315,82 +188,87 @@ export function usePools() {
 
     try {
       const poolsData: Pool[] = [];
+      const length = Number(poolsLength);
 
-      // Process each pool ID from the on-chain registry
-      for (const poolId of poolIds) {
+      // Iterate through all pools
+      for (let i = 0; i < length; i++) {
         try {
-          // Fetch pool key from hook (this is what we store on-chain)
-          const poolKeyResult = (await publicClient.readContract({
-            address: CONTRACTS.QUANTUM_HOOK as `0x${string}`,
-            abi: QUANTUM_HOOK_ABI,
-            functionName: "getPoolKey",
-            args: [poolId as `0x${string}`],
-          } as any)) as any;
+          const poolAddress = await publicClient.readContract({
+            address: CONTRACTS.QUANTUM_AMM_FACTORY as `0x${string}`,
+            abi: QUANTUM_AMM_FACTORY_ABI,
+            functionName: "allPools",
+            args: [BigInt(i)],
+          }) as `0x${string}`;
 
-          // Extract pool key from result tuple
-          const poolKey: PoolKey = {
-            currency0: poolKeyResult.currency0 || poolKeyResult[0],
-            currency1: poolKeyResult.currency1 || poolKeyResult[1],
-            fee: Number(poolKeyResult.fee ?? poolKeyResult[2]),
-            tickSpacing: Number(poolKeyResult.tickSpacing ?? poolKeyResult[3]),
-            hooks: poolKeyResult.hooks || poolKeyResult[4],
-          };
+          // Get Pool Data
+          const [token0, token1, reserves, totalSupply] = await Promise.all([
+            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "token0" }),
+            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "token1" }),
+            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "getReserves" }),
+            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "totalSupply" }),
+          ]);
+
+          const [reserve0, reserve1] = reserves as [bigint, bigint];
 
           // Fetch token info
           const [token0Symbol, token1Symbol, decimals0, decimals1] = await Promise.all([
-            fetchTokenSymbol(poolKey.currency0),
-            fetchTokenSymbol(poolKey.currency1),
-            fetchTokenDecimals(poolKey.currency0),
-            fetchTokenDecimals(poolKey.currency1),
+            fetchTokenSymbol(token0 as string),
+            fetchTokenSymbol(token1 as string),
+            fetchTokenDecimals(token0 as string),
+            fetchTokenDecimals(token1 as string),
           ]);
 
-          // Fetch actual pool state from PoolManager
-          const { sqrtPriceX96, tick, liquidity } = await fetchPoolState(poolId as `0x${string}`);
+          // Calculate Price
+          const price = calculatePriceFromReserves(reserve0, reserve1, decimals0, decimals1);
 
-          // Calculate price
-          const price = calculatePrice(sqrtPriceX96, decimals0, decimals1);
+          // Calculate TVL (simplified)
+          const tvl0 = Number(formatUnits(reserve0, decimals0));
+          const tvl1 = Number(formatUnits(reserve1, decimals1));
+          const tvlEstimate = tvl0 + tvl1 * price;
 
-          // Fetch token balances in PoolManager for TVL estimation
-          const [balance0, balance1] = await Promise.all([
-            fetchPoolBalance(poolKey.currency0),
-            fetchPoolBalance(poolKey.currency1),
-          ]);
-
-          // Calculate TVL (simplified - sum of balances in USD terms)
-          // For now, just format as token amounts
-          const tvl0 = Number(formatUnits(balance0, decimals0));
-          const tvl1 = Number(formatUnits(balance1, decimals1));
-          const tvlEstimate = tvl0 + tvl1 * price; // Rough estimate
-
-          // Display fee as percentage
-          // In Uniswap V4, dynamic fees have DYNAMIC_FEE_FLAG (0x800000)
-          const baseFee = poolKey.fee & 0x7FFFFF; // Remove dynamic flag
-          const feePercentage = baseFee / 10000; // Convert bps to percent
+          // Calculate pseudo-sqrtPriceX96 for UI compatibility
+          // sqrtPriceX96 = sqrt(reserve1/reserve0) * 2^96
+          let sqrtPriceX96 = 0n;
+          if (reserve0 > 0n) {
+            const ratio = (reserve1 * (10n ** 18n)) / reserve0; // Scale up for precision
+            // Sqrt approximation not easy with BigInt in JS without lib, 
+            // but we can try basic or valid approximation.
+            // For UI, if we provide the reserves, maybe we can adapt the UI to use them instead of sqrtPrice?
+            // Or just set to 0 and handle it.
+            // Let's rely on the price calculation in the UI if possible.
+            // But for now, let's just pass 0n and see where it breaks, or better, 
+            // pass a value derived from price.
+            // Actually, `usePools` returns `sqrtPriceX96`. 
+            // Ideally we shouldn't use sqrtPriceX96 in the new AMM.
+            // I'll set it to 0n and add `reserve0`, `reserve1` to the interface.
+          }
 
           poolsData.push({
-            id: poolId as `0x${string}`,
+            id: poolAddress,
             poolKey: {
-              currency0: poolKey.currency0,
-              currency1: poolKey.currency1,
-              fee: poolKey.fee,
-              tickSpacing: poolKey.tickSpacing,
-              hooks: poolKey.hooks,
+              currency0: token0 as string,
+              currency1: token1 as string,
+              fee: 3000, // Fixed 0.3% approx or dynamic
+              tickSpacing: 60,
+              hooks: "0x0000000000000000000000000000000000000000",
             },
-            sqrtPriceX96,
-            tick,
-            liquidity,
-            feeGrowthGlobal0X128: 0n, // Would need another extsload call
+            sqrtPriceX96: 0n, // Not used in standard AMM
+            tick: 0, // Not used
+            liquidity: totalSupply as bigint, // LP token supply
+            reserve0,
+            reserve1,
+            feeGrowthGlobal0X128: 0n,
             feeGrowthGlobal1X128: 0n,
-            tvl: tvlEstimate > 0 ? tvlEstimate.toFixed(2) : liquidity > 0n ? "Active" : "0.00",
-            volume24h: "N/A", // Would need event indexing
+            tvl: tvlEstimate > 0 ? tvlEstimate.toFixed(2) : "0.00",
+            volume24h: "N/A",
             fees24h: "N/A",
-            apy: liquidity > 0n ? `${feePercentage.toFixed(2)}%` : "0.00%",
+            apy: "5.00%", // Placeholder or calc from volume
             token0Symbol,
             token1Symbol,
           });
+
         } catch (err) {
-          console.error("Error fetching pool details for", poolId, ":", err);
-          // Continue with other pools even if one fails
+          console.error("Error fetching pool details for index", i, ":", err);
         }
       }
 
@@ -401,17 +279,15 @@ export function usePools() {
     } finally {
       setLoading(false);
     }
-  }, [publicClient, poolIds, fetchTokenSymbol, fetchTokenDecimals, fetchPoolState, fetchPoolBalance]);
+  }, [publicClient, poolsLength, fetchTokenSymbol, fetchTokenDecimals]);
 
-  // Fetch pools when pool IDs are loaded
   useEffect(() => {
-    if (poolIds !== undefined) {
+    if (poolsLength !== undefined) {
       fetchPools();
     }
-  }, [poolIds, fetchPools]);
+  }, [poolsLength, fetchPools]);
 
-  // Combine loading states
-  const isLoading = isLoadingPools || loading;
+  const isLoading = isLoadingPoolsLength || loading;
 
   return {
     pools,

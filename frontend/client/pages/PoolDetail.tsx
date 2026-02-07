@@ -168,7 +168,7 @@ export default function PoolDetail() {
     setError(null);
 
     try {
-      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_POOL_ROUTER; // QuantumPoolRouter
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_LIQUIDITY_ENGINE; // QuantumLiquidityEngine
 
       // Get token decimals
       const decimals0 = getTokenDecimals(pool.token0Symbol);
@@ -281,7 +281,7 @@ export default function PoolDetail() {
     setError(null);
 
     try {
-      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_POOL_ROUTER; // QuantumPoolRouter
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_LIQUIDITY_ENGINE; // QuantumLiquidityEngine
 
       const zeroForOne = swapTokenIn === "token0";
 

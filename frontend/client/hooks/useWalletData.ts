@@ -1,4 +1,4 @@
-import { useAccount, useBalance, useReadContract } from 'wagmi';
+import { useAccount, useBalance, useReadContract, usePublicClient } from 'wagmi';
 import { formatUnits } from 'viem';
 import { sepolia } from 'wagmi/chains';
 import { useState, useEffect } from 'react';
@@ -31,42 +31,6 @@ const ERC20_ABI = [
   },
 ] as const;
 
-// PoolManager ABI for position queries
-const POOL_MANAGER_ABI = [
-  {
-    name: 'ModifyLiquidity',
-    type: 'event',
-    inputs: [
-      { name: 'id', type: 'bytes32', indexed: true },
-      { name: 'sender', type: 'address', indexed: true },
-      { name: 'tickLower', type: 'int24', indexed: false },
-      { name: 'tickUpper', type: 'int24', indexed: false },
-      { name: 'liquidityDelta', type: 'int256', indexed: false },
-      { name: 'salt', type: 'bytes32', indexed: false },
-    ],
-  },
-  {
-    name: 'getSlot0',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'poolId', type: 'bytes32' }],
-    outputs: [
-      { name: 'sqrtPriceX96', type: 'uint160' },
-      { name: 'tick', type: 'int24' },
-      { name: 'protocolFee', type: 'uint24' },
-      { name: 'lpFee', type: 'uint24' },
-      { name: 'hookFee', type: 'uint24' },
-    ],
-  },
-  {
-    name: 'getLiquidity',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'poolId', type: 'bytes32' }],
-    outputs: [{ name: 'liquidity', type: 'uint128' }],
-  },
-] as const;
-
 interface TokenBalance {
   symbol: string;
   name: string;
@@ -79,16 +43,15 @@ interface TokenBalance {
 
 interface LPPosition {
   poolId: string;
-  tickLower: number;
-  tickUpper: number;
-  liquidity: bigint;
-  poolTVL: string;
+  balance: bigint;
+  share: number;
+  value: string;
 }
 
-// Sepolia Token Addresses
-const SEPOLIA_USDC = CONTRACTS.TOKENS.USDC;
-const SEPOLIA_PYUSD = CONTRACTS.TOKENS.PYUSD;
-const SEPOLIA_LINK = CONTRACTS.TOKENS.LINK;
+// Sepolia Token Addresses with robust fallbacks
+const SEPOLIA_USDC = CONTRACTS?.TOKENS?.USDC || "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+const SEPOLIA_PYUSD = CONTRACTS?.TOKENS?.PYUSD || "0xCaC524BcA292aaade2DF8A53592ed26633cc858C";
+const SEPOLIA_LINK = CONTRACTS?.TOKENS?.LINK || "0x779877A7B0D9E8603169DdbD7836e478b4624789";
 
 export function useWalletData() {
   const { address: eoaAddress, isConnected: wagmiConnected } = useAccount();
@@ -100,9 +63,10 @@ export function useWalletData() {
   const address = quantumAccountAddress as `0x${string}` | undefined || eoaAddress;
 
   const { pools } = usePools();
+  const publicClient = usePublicClient({ chainId: sepolia.id });
 
   // Use Wagmi hooks for balances (no CORS issues)
-  const { data: ethBalanceData } = useBalance({
+  const { data: ethBalanceData, refetch: ethBalanceRefetch } = useBalance({
     address,
     chainId: sepolia.id,
     query: {
@@ -112,7 +76,7 @@ export function useWalletData() {
   });
 
   // USDC Hooks
-  const { data: usdcBalanceData } = useReadContract({
+  const { data: usdcBalanceData, refetch: usdcRefetch } = useReadContract({
     address: SEPOLIA_USDC as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -129,7 +93,7 @@ export function useWalletData() {
   });
 
   // PYUSD Hooks
-  const { data: pyusdBalanceData } = useReadContract({
+  const { data: pyusdBalanceData, refetch: pyusdRefetch } = useReadContract({
     address: SEPOLIA_PYUSD as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -139,7 +103,7 @@ export function useWalletData() {
   });
 
   // LINK Hooks
-  const { data: linkBalanceData } = useReadContract({
+  const { data: linkBalanceData, refetch: linkRefetch } = useReadContract({
     address: SEPOLIA_LINK as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -153,8 +117,8 @@ export function useWalletData() {
   const [portfolioChange, setPortfolioChange] = useState<string>('0.00');
   const [volume24h, setVolume24h] = useState<string>('0.00');
   const [poolsJoined, setPoolsJoined] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
   const [lpPositions, setLpPositions] = useState<LPPosition[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Prices state
   const [prices, setPrices] = useState<{ [key: string]: number }>({
@@ -184,16 +148,58 @@ export function useWalletData() {
     };
 
     fetchPrices();
-    // Only fetch on load, no polling per user request
   }, []);
 
-  // LP positions - simplified for now (would need event fetching via provider)
+  // Fetch LP positions (User balance of Pool Tokens)
   useEffect(() => {
-    // For now, just count pools user might have positions in
-    // In production, would fetch from events via provider
-    setLpPositions([]);
-    setPoolsJoined(0);
-  }, [isConnected, pools.length]);
+    const fetchLP = async () => {
+      if (!address || !publicClient || pools.length === 0) {
+        setLpPositions([]);
+        setPoolsJoined(0);
+        return;
+      }
+
+      const positions: LPPosition[] = [];
+      let joinedCount = 0;
+
+      for (const pool of pools) {
+        try {
+          const balance = await publicClient.readContract({
+            address: pool.id as `0x${string}`,
+            abi: ERC20_ABI,
+            functionName: "balanceOf",
+            args: [address],
+          }) as bigint;
+
+          if (balance > 0n) {
+            joinedCount++;
+
+            // Calculate value share
+            // Share = Balance / TotalSupply
+            // Value = Share * TVL
+            const totalSupply = pool.liquidity; // In our new Pool interface, liquidity IS totalSupply
+            const share = Number(balance) / Number(totalSupply);
+            const tvlVal = parseFloat(pool.tvl || "0");
+            const val = tvlVal * share;
+
+            positions.push({
+              poolId: pool.id,
+              balance,
+              share,
+              value: val.toFixed(2)
+            });
+          }
+        } catch (e) {
+          console.error("Error fetching LP balance:", e);
+        }
+      }
+
+      setLpPositions(positions);
+      setPoolsJoined(joinedCount);
+    };
+
+    fetchLP();
+  }, [address, pools, publicClient]);
 
   // Calculate token balances from Wagmi data (runs only when data changes)
   useEffect(() => {
@@ -259,30 +265,19 @@ export function useWalletData() {
 
       // Add LP positions as LP tokens
       for (const position of lpPositions) {
-        if (position.liquidity > 0n) {
-          const pool = pools.find(p => p.id === position.poolId);
-          if (pool) {
-            // Calculate LP token value based on pool share
-            const poolLiquidity = pool.liquidity || 0n;
-            const userShare = poolLiquidity > 0n
-              ? Number(position.liquidity) / Number(poolLiquidity)
-              : 0;
+        const pool = pools.find(p => p.id === position.poolId);
+        if (pool) {
+          const poolName = `${pool.token0Symbol || 'TOKEN0'}-${pool.token1Symbol || 'TOKEN1'}`;
 
-            const poolTVL = parseFloat(pool.tvl || '0');
-            const lpValue = poolTVL * userShare;
-
-            const poolName = `${pool.token0Symbol || 'TOKEN0'}-${pool.token1Symbol || 'TOKEN1'}`;
-
-            balances.push({
-              symbol: 'LP',
-              name: `${poolName} LP`,
-              amount: formatUnits(position.liquidity, 18),
-              value: `$${lpValue.toFixed(2)}`,
-              address: position.poolId,
-              isLP: true,
-              poolId: position.poolId,
-            });
-          }
+          balances.push({
+            symbol: 'LP',
+            name: `${poolName} LP`,
+            amount: formatUnits(position.balance, 18),
+            value: `$${position.value}`,
+            address: position.poolId,
+            isLP: true,
+            poolId: position.poolId,
+          });
         }
       }
 
@@ -320,8 +315,6 @@ export function useWalletData() {
     }
   }, [pools]);
 
-  // No additional effects needed - Wagmi handles refetching automatically
-
   return {
     totalBalance,
     portfolioChange,
@@ -331,8 +324,15 @@ export function useWalletData() {
     lpPositions,
     loading,
     isConnected,
-    refetch: () => {
-      // Wagmi handles refetching automatically via query refetchInterval
+    refetch: async () => {
+      await Promise.all([
+        ethBalanceRefetch(),
+        usdcRefetch(),
+        pyusdRefetch(),
+        linkRefetch(),
+      ]);
+      setLoading(true);
+      // The useEffects will trigger update
     },
   };
 }

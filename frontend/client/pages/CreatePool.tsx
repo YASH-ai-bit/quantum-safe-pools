@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import PoolCreationModal, { PoolCreationStep } from "@/components/PoolCreationModal";
 import {
   ArrowRight,
   Plus,
@@ -10,13 +11,16 @@ import {
   AlertCircle,
   Wallet,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
 import { useSnap } from "@/hooks/useSnap";
-import { parseUnits } from "viem";
+import { parseUnits, formatUnits } from "viem";
 import { CONTRACTS } from "@shared/contracts";
+import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionReceipt, useBalance } from "wagmi";
+import { waitForTransactionReceipt } from "@wagmi/core";
+import { wagmiConfig } from "@/lib/wagmi";
 
 // Common token addresses on Sepolia - these should ideally be fetched from a token registry
 const TOKEN_ADDRESSES: Record<string, string> = {
@@ -45,6 +49,31 @@ const getTokenDecimals = (symbol: string): number => {
   return TOKEN_DECIMALS[symbol.toUpperCase()] ?? 18;
 };
 
+// Minimal ERC20 ABI
+const ERC20_ABI = [
+  {
+    name: 'transfer',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  }
+] as const;
+
 export default function CreatePool() {
   const [step, setStep] = useState(1);
   const [tokenA, setTokenA] = useState("");
@@ -54,14 +83,24 @@ export default function CreatePool() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [progressMessage, setProgressMessage] = useState<string | null>(null); // Progress modal state
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // Pool creation modal state
+  const [showCreationModal, setShowCreationModal] = useState(false);
+  const [creationSteps, setCreationSteps] = useState<PoolCreationStep[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
   const navigate = useNavigate();
   const { createPoolBatched, loading } =
     usePoolOperations();
   const { refetch: refetchWallet, tokenBalances } = useWalletData();
   const { refetch: refetchPools } = usePools();
   const { isConnected, accountAddress, sendTransaction } = useSnap();
+
+  // EOA Hooks
+  const { address: eoaAddress, isConnected: isEoaConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+
 
   const tokens = [
     { symbol: "ETH", name: "Ethereum", address: TOKEN_ADDRESSES.ETH },
@@ -90,27 +129,103 @@ export default function CreatePool() {
     return parseFloat(token.amount) || 0;
   };
 
-  // Validate balances for selected tokens
+  // Fetch EOA Balances
+  const { data: eoaEthBalance } = useBalance({ address: eoaAddress });
+
+  const { data: eoaTokenBalances } = useReadContracts({
+    contracts: [
+      {
+        address: TOKEN_ADDRESSES[tokenA] as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: eoaAddress ? [eoaAddress] : undefined,
+      },
+      {
+        address: TOKEN_ADDRESSES[tokenB] as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: eoaAddress ? [eoaAddress] : undefined,
+      }
+    ],
+    query: { enabled: !!eoaAddress && !!tokenA && !!tokenB }
+  });
+
+  const getEoaBalance = (symbol: string, index: number) => {
+    if (!eoaAddress) return 0;
+    if (symbol === 'ETH') return eoaEthBalance ? parseFloat(formatUnits(eoaEthBalance.value, 18)) : 0;
+
+    const result = eoaTokenBalances?.[index]?.result;
+    if (result === undefined) return 0; // Don't block if loading or error on EOA read, assume 0 for check
+
+    const decimals = getTokenDecimals(symbol);
+    return parseFloat(formatUnits(result as bigint, decimals));
+  };
+
+  // Validate balances for selected tokens (Quantum OR EOA)
   const balanceValidation = useMemo(() => {
     if (!tokenA || !tokenB || !amountA || !amountB) {
-      return { isValid: true, errors: [] };
+      return { isValid: true, errors: [], needsDepositA: false, needsDepositB: false };
     }
 
     const errors: string[] = [];
-    const balanceA = getTokenBalance(tokenA);
-    const balanceB = getTokenBalance(tokenB);
+
+    // Quantum Balances
+    const qBalanceA = getTokenBalance(tokenA);
+    const qBalanceB = getTokenBalance(tokenB);
+
+    // EOA Balances
+    const eoaBalanceA = getEoaBalance(tokenA, 0);
+    const eoaBalanceB = getEoaBalance(tokenB, 1);
+
     const requiredA = parseFloat(amountA) || 0;
     const requiredB = parseFloat(amountB) || 0;
 
-    if (requiredA > 0 && balanceA < requiredA) {
-      errors.push(`Insufficient ${tokenA} balance. You have ${balanceA.toFixed(4)} but need ${requiredA}`);
-    }
-    if (requiredB > 0 && balanceB < requiredB) {
-      errors.push(`Insufficient ${tokenB} balance. You have ${balanceB.toFixed(4)} but need ${requiredB}`);
+    let needsDepositA = false;
+    let needsDepositB = false;
+
+    // Check Token A
+    if (requiredA > 0) {
+      if (qBalanceA < requiredA) {
+        // Check if EOA has enough to cover the deficit
+        const deficit = requiredA - qBalanceA;
+        if (eoaBalanceA >= deficit) {
+          needsDepositA = true;
+        } else {
+          // Total verification: Q + EOA
+          if ((qBalanceA + eoaBalanceA) < requiredA) {
+            errors.push(`Insufficient ${tokenA} balance. Total: ${(qBalanceA + eoaBalanceA).toFixed(4)} (Quantum: ${qBalanceA.toFixed(4)}, EOA: ${eoaBalanceA.toFixed(4)}) needed: ${requiredA}`);
+          } else {
+            needsDepositA = true;
+          }
+        }
+      }
     }
 
-    return { isValid: errors.length === 0, errors };
-  }, [tokenA, tokenB, amountA, amountB, tokenBalances]);
+    // Check Token B
+    if (requiredB > 0) {
+      if (qBalanceB < requiredB) {
+        const deficit = requiredB - qBalanceB;
+        if (eoaBalanceB >= deficit) {
+          needsDepositB = true;
+        } else {
+          if ((qBalanceB + eoaBalanceB) < requiredB) {
+            errors.push(`Insufficient ${tokenB} balance. Total: ${(qBalanceB + eoaBalanceB).toFixed(4)} (Quantum: ${qBalanceB.toFixed(4)}, EOA: ${eoaBalanceB.toFixed(4)}) needed: ${requiredB}`);
+          } else {
+            needsDepositB = true;
+          }
+        }
+      }
+    }
+
+    return { isValid: errors.length === 0, errors, needsDepositA, needsDepositB };
+  }, [tokenA, tokenB, amountA, amountB, tokenBalances, eoaTokenBalances, eoaEthBalance, eoaAddress]);
+
+  // Helper function to update a specific step
+  const updateStep = useCallback((stepId: string, updates: Partial<PoolCreationStep>) => {
+    setCreationSteps(prev => prev.map(s =>
+      s.id === stepId ? { ...s, ...updates } : s
+    ));
+  }, []);
 
   const handleCreatePool = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +238,51 @@ export default function CreatePool() {
     setError(null);
     setTxHash(null);
     setIsSuccess(false);
+
+    // Initialize creation steps
+    const initialSteps: PoolCreationStep[] = [];
+
+    if (balanceValidation.needsDepositA) {
+      initialSteps.push({
+        id: 'deposit_a',
+        title: `DEPOSIT_${tokenA}`,
+        description: `Transferring ${tokenA} to Quantum Account`,
+        status: 'pending',
+      });
+    }
+    if (balanceValidation.needsDepositB) {
+      initialSteps.push({
+        id: 'deposit_b',
+        title: `DEPOSIT_${tokenB}`,
+        description: `Transferring ${tokenB} to Quantum Account`,
+        status: 'pending',
+      });
+    }
+
+    initialSteps.push(
+      {
+        id: 'create_pool',
+        title: 'CREATE_POOL',
+        description: `Initializing ${tokenA}/${tokenB} pool`,
+        status: 'pending',
+      },
+      {
+        id: 'approve_tokens',
+        title: 'APPROVE_TOKENS',
+        description: 'Approving tokens for router',
+        status: 'pending',
+      },
+      {
+        id: 'add_liquidity',
+        title: 'ADD_LIQUIDITY',
+        description: 'Adding initial liquidity',
+        status: 'pending',
+      }
+    );
+
+    setCreationSteps(initialSteps);
+    setCurrentStepIndex(0);
+    setShowCreationModal(true);
     setStep(4); // Processing step
 
     try {
@@ -146,12 +306,10 @@ export default function CreatePool() {
         throw new Error(`Invalid address for ${tokenB}.`);
       }
 
+      if (!accountAddress) throw new Error("Quantum Account address missing");
+
       console.log("%c[CREATE_POOL] Token A:", "color: #00ffff;", tokenA, tokenAObj.address);
       console.log("%c[CREATE_POOL] Token B:", "color: #00ffff;", tokenB, tokenBObj.address);
-
-      // Calculate pool parameters
-      const initialPrice = BigInt("79228162514264337593543950336"); // 2^96 for 1:1
-      const tickSpacing = 60;
 
       // Token decimals and amounts
       const decimalsA = getTokenDecimals(tokenA);
@@ -162,22 +320,98 @@ export default function CreatePool() {
       console.log("[CREATE_POOL] Amount A (wei):", parsedAmountA.toString());
       console.log("[CREATE_POOL] Amount B (wei):", parsedAmountB.toString());
 
-      setProgressMessage("Initializing Quantum Batch Transaction...");
+      // --- Execute Auto-Deposits ---
+
+      // Deposit A
+      if (balanceValidation.needsDepositA) {
+        updateStep('deposit_a', { status: 'active' });
+
+        const currentQBalance = parseUnits(getTokenBalance(tokenA).toString(), decimalsA);
+        let deficit = parsedAmountA;
+        if (currentQBalance > 0n) {
+          deficit = parsedAmountA - currentQBalance;
+        }
+
+        if (deficit > 0n) {
+          if (tokenA === 'ETH') {
+            throw new Error("Please deposit ETH manually to your Quantum Account first.");
+          }
+
+          const txHashA = await writeContractAsync({
+            address: tokenAObj.address as `0x${string}`,
+            abi: ERC20_ABI,
+            functionName: 'transfer',
+            args: [accountAddress as `0x${string}`, deficit],
+          });
+
+          await waitForTransactionReceipt(wagmiConfig, { hash: txHashA });
+          updateStep('deposit_a', { status: 'complete', txHash: txHashA });
+          // Short delay to let balance update
+          await new Promise(r => setTimeout(r, 2000));
+          await refetchWallet();
+        } else {
+          updateStep('deposit_a', { status: 'complete' });
+        }
+      }
+
+      // Deposit B
+      if (balanceValidation.needsDepositB) {
+        updateStep('deposit_b', { status: 'active' });
+
+        const currentQBalance = parseUnits(getTokenBalance(tokenB).toString(), decimalsB);
+        let deficit = parsedAmountB;
+        if (currentQBalance > 0n) {
+          deficit = parsedAmountB - currentQBalance;
+        }
+
+        if (deficit > 0n) {
+          if (tokenB === 'ETH') {
+            throw new Error("Please deposit ETH manually to your Quantum Account first.");
+          }
+
+          const txHashB = await writeContractAsync({
+            address: tokenBObj.address as `0x${string}`,
+            abi: ERC20_ABI,
+            functionName: 'transfer',
+            args: [accountAddress as `0x${string}`, deficit],
+          });
+
+          await waitForTransactionReceipt(wagmiConfig, { hash: txHashB });
+          updateStep('deposit_b', { status: 'complete', txHash: txHashB });
+          await new Promise(r => setTimeout(r, 2000));
+          await refetchWallet();
+        } else {
+          updateStep('deposit_b', { status: 'complete' });
+        }
+      }
+
+      // --- Execute Quantum Batch ---
+
+      // Update step 1 as active
+      updateStep('create_pool', { status: 'active' });
 
       // Call Atomic Batch Creation
       const result = await createPoolBatched(
         tokenAObj.address,
         tokenBObj.address,
-        tickSpacing,
-        initialPrice,
         parsedAmountA,
         parsedAmountB
       );
 
+      // Mark steps as complete based on result
       if (result?.transactionHash) {
+        // Mark all quantum steps as complete
+        setCreationSteps(prev => prev.map(s => {
+          if (s.id.startsWith('deposit')) return s;
+          return {
+            ...s,
+            status: 'complete' as const,
+            txHash: result.transactionHash,
+          };
+        }));
+
         setTxHash(result.transactionHash);
         setIsSuccess(true);
-        setProgressMessage("Pool created successfully!");
 
         // Refresh data
         refetchPools();
@@ -185,6 +419,7 @@ export default function CreatePool() {
 
         // Navigate to pools page after a delay
         setTimeout(() => {
+          setShowCreationModal(false);
           navigate("/pools");
         }, 3000);
       } else {
@@ -193,11 +428,28 @@ export default function CreatePool() {
 
     } catch (err: any) {
       console.error("[CREATE_POOL] Error:", err);
-      setError(err.message || "Failed to create pool");
-      setProgressMessage(null);
+      const errorMessage = err.message || "Failed to create pool";
+      setError(errorMessage);
+
+      // Mark current step as error
+      setCreationSteps(prev => prev.map((s, i) =>
+        s.status === 'active' ? { ...s, status: 'error' as const } : s
+      ));
+
       setStep(5); // Error step
     }
   };
+
+  const handleCloseModal = () => {
+    setShowCreationModal(false);
+    if (isSuccess) {
+      navigate("/pools");
+    } else if (error) {
+      setStep(3); // Go back to review step
+      setError(null);
+    }
+  };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -223,33 +475,14 @@ export default function CreatePool() {
           </div>
 
           {/* Progress Modal */}
-          {progressMessage && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-              <div className="bg-black border-2 border-primary p-8 max-w-md mx-4">
-                <div className="text-center">
-                  <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-                  <h2 className="text-xl font-bold mb-4 pixel-text text-primary">
-                    🔐 Creating Pool
-                  </h2>
-                  <p className="text-foreground/80 pixel-text mb-4">
-                    {progressMessage}
-                  </p>
-                  <div className="text-left bg-black/50 border border-primary/30 p-4 mt-4">
-                    <p className="text-sm text-foreground/60 pixel-text mb-2">Sequential operations:</p>
-                    <ul className="text-sm text-foreground/80 pixel-text space-y-1">
-                      <li>1. Initialize pool</li>
-                      <li>2. Approve Token A</li>
-                      <li>3. Approve Token B</li>
-                      <li>4. Add liquidity</li>
-                    </ul>
-                  </div>
-                  <p className="text-xs text-foreground/50 mt-4 pixel-text">
-                    Each operation signed with quantum-safe Dilithium
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          <PoolCreationModal
+            isOpen={showCreationModal}
+            steps={creationSteps}
+            currentStepIndex={currentStepIndex}
+            error={error}
+            onClose={handleCloseModal}
+            canClose={isSuccess || !!error}
+          />
           <div className="flex gap-4 mb-12">
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">

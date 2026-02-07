@@ -1,8 +1,20 @@
 
+
+
 export const ROUTER_ABI = [
-    "function initializePoolSafe(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external returns (int24 tick)",
-    "function swap(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, tuple(bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData) external returns (int256 delta)",
-    "function modifyLiquidity(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, tuple(int24 tickLower, int24 tickUpper, int256 liquidityDelta, bytes32 salt) params, bytes hookData) external returns (int256 delta)"
+    "function createPool(address tokenA, address tokenB) external returns (address pool)",
+    "function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256 amountA, uint256 amountB, uint256 liquidity)",
+    "function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256 amountA, uint256 amountB)",
+    "function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external returns (uint256[] memory amounts)"
+];
+
+export const POOL_ABI = [
+    "function mint(address to) external returns (uint256 liquidity)",
+    "function burn(address to) external returns (uint256 amount0, uint256 amount1)",
+    "function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external",
+    "function getReserves() external view returns (uint256 reserve0, uint256 reserve1)",
+    "function token0() external view returns (address)",
+    "function token1() external view returns (address)"
 ];
 
 export const ERC20_ABI = [

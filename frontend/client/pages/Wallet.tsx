@@ -4,7 +4,7 @@ import Footer from "@/components/layout/Footer";
 import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
 import { useAccount, useSendTransaction, useBalance, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther, isAddress, parseUnits, formatUnits } from "viem";
+import { parseEther, isAddress, parseUnits, formatUnits, encodeFunctionData } from "viem";
 import { CONTRACTS } from "@shared/contracts";
 import {
     Copy,
@@ -155,7 +155,31 @@ export default function Wallet() {
                     refetch();
                 }
             } else {
-                setError("Outbound ERC20 transfers coming soon. Please use CLI.");
+                // ERC20 Transfer
+                const tokenConfig = getTokenConfig(selectedToken);
+                if (!tokenConfig.address) {
+                    throw new Error("Token address not found");
+                }
+
+                const amountBigInt = parseUnits(amount, tokenConfig.decimals);
+                const data = encodeFunctionData({
+                    abi: ERC20_ABI,
+                    functionName: 'transfer',
+                    args: [recipient as `0x${string}`, amountBigInt]
+                });
+
+                const result = await sendTransaction(tokenConfig.address, "0", data);
+
+                if (result.transactionHash) {
+                    setTxHash(result.transactionHash);
+                    toast({
+                        title: "Transaction Sent",
+                        description: `Sent ${amount} ${selectedToken} securely.`,
+                    });
+                    setAmount("");
+                    setRecipient("");
+                    refetch();
+                }
             }
 
         } catch (err: any) {
@@ -333,7 +357,9 @@ export default function Wallet() {
                                                     className="bg-black border border-primary/50 text-foreground p-2 text-sm focus:outline-none"
                                                 >
                                                     <option value="ETH">ETH</option>
-                                                    {/* Outbound ERC20s omitted for now */}
+                                                    <option value="USDC">USDC</option>
+                                                    <option value="PYUSD">PYUSD</option>
+                                                    <option value="LINK">LINK</option>
                                                 </select>
                                             </div>
                                         </div>

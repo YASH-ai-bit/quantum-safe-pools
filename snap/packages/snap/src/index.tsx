@@ -482,37 +482,48 @@ async function handleSendTransaction(origin: string, params: any) {
       try {
         const decoded = routerInterface.parseTransaction({ data });
         if (decoded) {
-          if (decoded.name === 'initializePoolSafe') {
-            const [key, sqrtPriceX96] = decoded.args;
-            actionDescription = 'Initialize Pool';
+          if (decoded.name === 'createPool') {
+            const [tokenA, tokenB] = decoded.args;
+            actionDescription = 'Create Pool';
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> Initialize Pool (Quantum Safe)</Text>
-                <Text><Bold>Currency0:</Bold> {key[0].slice(0, 10)}...</Text>
-                <Text><Bold>Currency1:</Bold> {key[1].slice(0, 10)}...</Text>
-                <Text><Bold>Fee Tier:</Bold> {key[2].toString()}</Text>
-                <Text><Bold>Init Price:</Bold> {sqrtPriceX96.toString()}</Text>
+                <Text><Bold>Action:</Bold> Create Quantum Pool</Text>
+                <Text><Bold>Token A:</Bold> {tokenA}</Text>
+                <Text><Bold>Token B:</Bold> {tokenB}</Text>
               </Box>
             );
-          } else if (decoded.name === 'modifyLiquidity') {
-            actionDescription = 'Modify Liquidity';
-            const [key, params] = decoded.args;
+          } else if (decoded.name === 'addLiquidity') {
+            actionDescription = 'Add Liquidity';
+            const [tokenA, tokenB, amountADesired, amountBDesired] = decoded.args;
             detailedContent = (
               <Box>
-                <Text><Bold>Action:</Bold> Add/Remove Liquidity</Text>
-                <Text><Bold>Pool:</Bold> {`${key[0].slice(0, 6)}... / ${key[1].slice(0, 6)}...`}</Text>
-                <Text><Bold>Delta:</Bold> {params[2].toString()}</Text>
-                <Text><Bold>Range:</Bold> [{params[0].toString()}, {params[1].toString()}]</Text>
+                <Text><Bold>Action:</Bold> Add Liquidity</Text>
+                <Text><Bold>Token A:</Bold> {tokenA}</Text>
+                <Text><Bold>Token B:</Bold> {tokenB}</Text>
+                <Text><Bold>Amount A:</Bold> {amountADesired.toString()}</Text>
+                <Text><Bold>Amount B:</Bold> {amountBDesired.toString()}</Text>
               </Box>
             );
-          } else if (decoded.name === 'swap') {
+          } else if (decoded.name === 'removeLiquidity') {
+            actionDescription = 'Remove Liquidity';
+            const [tokenA, tokenB, liquidity] = decoded.args;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Remove Liquidity</Text>
+                <Text><Bold>Token A:</Bold> {tokenA}</Text>
+                <Text><Bold>Token B:</Bold> {tokenB}</Text>
+                <Text><Bold>Liquidity Burned:</Bold> {liquidity.toString()}</Text>
+              </Box>
+            );
+          } else if (decoded.name === 'swapExactTokensForTokens') {
             actionDescription = 'Swap (Quantum)';
-            const [key, params] = decoded.args;
+            const [amountIn, amountOutMin, path] = decoded.args;
             detailedContent = (
               <Box>
                 <Text><Bold>Action:</Bold> Swap</Text>
-                <Text><Bold>ZeroForOne:</Bold> {params[0] ? 'Yes' : 'No'}</Text>
-                <Text><Bold>Amount:</Bold> {params[1].toString()}</Text>
+                <Text><Bold>Amount In:</Bold> {amountIn.toString()}</Text>
+                <Text><Bold>Min Amount Out:</Bold> {amountOutMin.toString()}</Text>
+                <Text><Bold>Path:</Bold> {path.join(' -> ')}</Text>
               </Box>
             );
           } else {
@@ -657,8 +668,8 @@ async function handleSendTransaction(origin: string, params: any) {
   let useBatch = false;
   let batchCallData = '0x';
 
-  if (!isSafe) {
-    logYellow('Account not registered. Batching registration...', {
+  if (!isSafe && deployed) {
+    logYellow('Account deployed but not registered. Batching registration...', {
       accountAddress,
     });
     useBatch = true;
@@ -675,6 +686,8 @@ async function handleSendTransaction(origin: string, params: any) {
       [0n, BigInt(value || 0)],
       [registerData, data || '0x'],
     );
+  } else if (!isSafe && !deployed) {
+    logYellow('Account not deployed. Registration will be handled effectively by initCode (createAccount).');
   }
 
 
@@ -801,6 +814,13 @@ async function handleSendTransaction(origin: string, params: any) {
 
       if (receiptResult.result) {
         receipt = receiptResult.result;
+
+        // Check for UserOp execution success
+        if (receipt.success === false) {
+          const reason = receipt.reason || 'Transaction reverted during execution';
+          throw new Error(reason);
+        }
+
         logYellow('Transaction confirmed!', {
           txHash: receipt.receipt.transactionHash,
           blockNumber: receipt.receipt.blockNumber,
@@ -962,10 +982,16 @@ async function handleBatchTransactions(
     }
   }
 
-  // If not registered, prepend registration to batch
+  // Check if deployed to decide on registration
+  const deployed = await isAccountDeployed(accountAddress, provider);
+
+  // Default to original batch data
   let finalBatchCallData = batchCallData;
-  if (!isSafe) {
-    logYellow('Account not registered. Adding registration to batch...');
+
+  // If not registered AND deployed, prepend registration to batch
+  // (If not deployed, createAccount will handle it)
+  if (!isSafe && deployed) {
+    logYellow('Account deployed but not registered. Adding registration to batch...');
 
     const registryInterface = new Interface([
       'function register(bytes32 publicKeyHash)',
@@ -1059,6 +1085,17 @@ async function handleBatchTransactions(
       const receiptResult = await receiptResponse.json();
       if (receiptResult.result) {
         receipt = receiptResult.result;
+
+        // Check for UserOp execution success
+        if (receipt.success === false) {
+          const reason = receipt.reason || 'Transaction reverted during execution';
+          throw new Error(reason);
+        }
+
+        logYellow('Transaction confirmed!', {
+          txHash: receipt.receipt.transactionHash,
+          blockNumber: receipt.receipt.blockNumber,
+        });
         break;
       }
 

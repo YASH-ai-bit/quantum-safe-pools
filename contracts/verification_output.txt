@@ -1,0 +1,244 @@
+Compiling 1 files with Solc 0.8.28
+Solc 0.8.28 finished in 1.17s
+Compiler run successful with warnings:
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/QuantumAMMPool.sol:97:71:
+   |
+97 |     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external {
+   |                                                                       ^^^^^^^^^^^^^^^^^^^
+
+Warning (2072): Unused local variable.
+  --> script/VerifyFlow.s.sol:35:10:
+   |
+35 |         (address t0, address t1) = address(tokenA) < address(tokenB) ? (address(tokenA), address(tokenB)) : (address(tokenB), address(tokenA));
+   |          ^^^^^^^^^^
+
+Warning (2072): Unused local variable.
+  --> script/VerifyFlow.s.sol:35:22:
+   |
+35 |         (address t0, address t1) = address(tokenA) < address(tokenB) ? (address(tokenA), address(tokenB)) : (address(tokenB), address(tokenA));
+   |                      ^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to view
+  --> src/QuantumAMMRouter.sol:31:5:
+   |
+31 |     function _addLiquidity(
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Traces:
+  [2710677] VerifyFlow::run()
+    Γö£ΓöÇ [0] VM::envUint("PRIVATE_KEY") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] <env var value>
+    Γö£ΓöÇ [0] VM::addr(<pk>) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE
+    Γö£ΓöÇ [0] VM::startBroadcast(<pk>)
+    Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γö£ΓöÇ [400840] ΓåÆ new MockToken@0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 1000000000000000000000000 [1e24])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 1543 bytes of code
+    Γö£ΓöÇ [400840] ΓåÆ new MockToken@0x93a54bb8dB627Df480f19Db639d077670AFc18fa
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 1000000000000000000000000 [1e24])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 1543 bytes of code
+    Γö£ΓöÇ [0] console::log("Token A deployed at:", MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Token B deployed at:", MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Creating Pool...") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [1549137] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::createPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa])
+    Γöé   Γö£ΓöÇ [1422806] ΓåÆ new QuantumAMMPool@0xCca5396f983152C43ED9f8773B7942042Db2886b
+    Γöé   Γöé   Γö£ΓöÇ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 6759 bytes of code
+    Γöé   Γö£ΓöÇ emit PoolCreated(token0: MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa], token1: MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], pool: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], allPoolsLength: 1)
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [0] console::log("Pool created at:", QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Approving Router...") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [24325] MockToken::approve(0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    Γöé   Γö£ΓöÇ emit Approval(owner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, spender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, value: 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γö£ΓöÇ [24325] MockToken::approve(0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    Γöé   Γö£ΓöÇ emit Approval(owner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, spender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, value: 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γö£ΓöÇ [0] console::log("Adding Liquidity...") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [190223] 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722::addLiquidity(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa], 1000000000000000000000 [1e21], 1000000000000000000000 [1e21], 0, 0, 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 1770445056 [1.77e9])
+    Γöé   Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γöé   Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γöé   Γö£ΓöÇ [4418] QuantumAMMPool::getReserves() [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 0, 0
+    Γöé   Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γöé   Γö£ΓöÇ [25092] MockToken::transferFrom(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], 1000000000000000000000 [1e21])
+    Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, to: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], value: 1000000000000000000000 [1e21])
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γöé   Γö£ΓöÇ [25092] MockToken::transferFrom(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], 1000000000000000000000 [1e21])
+    Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, to: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], value: 1000000000000000000000 [1e21])
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γöé   Γö£ΓöÇ [129424] QuantumAMMPool::mint(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21]
+    Γöé   Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21]
+    Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x000000000000000000000000000000000000dEaD, value: 1000)
+    Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 999999999999999999000 [9.999e20])
+    Γöé   Γöé   Γö£ΓöÇ emit Sync(reserve0: 1000000000000000000000 [1e21], reserve1: 1000000000000000000000 [1e21])
+    Γöé   Γöé   Γö£ΓöÇ emit Mint(sender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, amount0: 1000000000000000000000 [1e21], amount1: 1000000000000000000000 [1e21])
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 999999999999999999000 [9.999e20]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21], 1000000000000000000000 [1e21], 999999999999999999000 [9.999e20]
+    Γö£ΓöÇ [0] console::log("Liquidity Added!") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Swapping...") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [30185] 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722::swapExactTokensForTokens(10000000000000000000 [1e19], 0, [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea, 0x93a54bb8dB627Df480f19Db639d077670AFc18fa], 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 1770445056 [1.77e9])
+    Γöé   Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γöé   Γö£ΓöÇ [418] QuantumAMMPool::getReserves() [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21], 1000000000000000000000 [1e21]
+    Γöé   Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γöé   Γö£ΓöÇ [3192] MockToken::transferFrom(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], 10000000000000000000 [1e19])
+    Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, to: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], value: 10000000000000000000 [1e19])
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γöé   Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γöé   Γö£ΓöÇ [16780] QuantumAMMPool::swap(9871580343970612988 [9.871e18], 0, 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 0x)
+    Γöé   Γöé   Γö£ΓöÇ [2908] MockToken::transfer(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 9871580343970612988 [9.871e18])
+    Γöé   Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 9871580343970612988 [9.871e18])
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γöé   Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 990128419656029387012 [9.901e20]
+    Γöé   Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1010000000000000000000 [1.01e21]
+    Γöé   Γöé   Γö£ΓöÇ [2555] 0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec::isRegistered(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE) [staticcall]
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] false
+    Γöé   Γöé   Γö£ΓöÇ emit Sync(reserve0: 990128419656029387012 [9.901e20], reserve1: 1010000000000000000000 [1.01e21])
+    Γöé   Γöé   Γö£ΓöÇ emit Swap(sender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, amount0In: 0, amount1In: 10000000000000000000 [1e19], amount0Out: 9871580343970612988 [9.871e18], amount1Out: 0, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] [10000000000000000000 [1e19], 9871580343970612988 [9.871e18]]
+    Γö£ΓöÇ [0] console::log("Swap Successful!") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] VM::stopBroadcast()
+    Γöé   ΓööΓöÇ ΓåÉ [Return]
+    ΓööΓöÇ ΓåÉ [Return]
+
+
+Script ran successfully.
+
+== Logs ==
+  Token A deployed at: 0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea
+  Token B deployed at: 0x93a54bb8dB627Df480f19Db639d077670AFc18fa
+  Creating Pool...
+  Pool created at: 0xCca5396f983152C43ED9f8773B7942042Db2886b
+  Approving Router...
+  Adding Liquidity...
+  Liquidity Added!
+  Swapping...
+  Swap Successful!
+
+## Setting up 1 EVM.
+==========================
+Simulated On-chain Traces:
+
+  [400840] ΓåÆ new MockToken@0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea
+    Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 1000000000000000000000000 [1e24])
+    ΓööΓöÇ ΓåÉ [Return] 1543 bytes of code
+
+  [400840] ΓåÆ new MockToken@0x93a54bb8dB627Df480f19Db639d077670AFc18fa
+    Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 1000000000000000000000000 [1e24])
+    ΓööΓöÇ ΓåÉ [Return] 1543 bytes of code
+
+  [1549137] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::createPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa])
+    Γö£ΓöÇ [1422806] ΓåÆ new QuantumAMMPool@0xCca5396f983152C43ED9f8773B7942042Db2886b
+    Γöé   Γö£ΓöÇ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 6759 bytes of code
+    Γö£ΓöÇ emit PoolCreated(token0: MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa], token1: MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], pool: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], allPoolsLength: 1)
+    ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+
+  [24325] MockToken::approve(0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    Γö£ΓöÇ emit Approval(owner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, spender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, value: 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    ΓööΓöÇ ΓåÉ [Return] true
+
+  [24325] MockToken::approve(0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    Γö£ΓöÇ emit Approval(owner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, spender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, value: 115792089237316195423570985008687907853269984665640564039457584007913129639935 [1.157e77])
+    ΓööΓöÇ ΓåÉ [Return] true
+
+  [215823] 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722::addLiquidity(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa], 1000000000000000000000 [1e21], 1000000000000000000000 [1e21], 0, 0, 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 1770445056 [1.77e9])
+    Γö£ΓöÇ [2623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [4418] QuantumAMMPool::getReserves() [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 0, 0
+    Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [31892] MockToken::transferFrom(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], 1000000000000000000000 [1e21])
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, to: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], value: 1000000000000000000000 [1e21])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γö£ΓöÇ [31892] MockToken::transferFrom(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], 1000000000000000000000 [1e21])
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, to: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], value: 1000000000000000000000 [1e21])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γö£ΓöÇ [129424] QuantumAMMPool::mint(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21]
+    Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21]
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x000000000000000000000000000000000000dEaD, value: 1000)
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 999999999999999999000 [9.999e20])
+    Γöé   Γö£ΓöÇ emit Sync(reserve0: 1000000000000000000000 [1e21], reserve1: 1000000000000000000000 [1e21])
+    Γöé   Γö£ΓöÇ emit Mint(sender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, amount0: 1000000000000000000000 [1e21], amount1: 1000000000000000000000 [1e21])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 999999999999999999000 [9.999e20]
+    ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21], 1000000000000000000000 [1e21], 999999999999999999000 [9.999e20]
+
+  [72985] 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722::swapExactTokensForTokens(10000000000000000000 [1e19], 0, [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea, 0x93a54bb8dB627Df480f19Db639d077670AFc18fa], 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 1770445056 [1.77e9])
+    Γö£ΓöÇ [2623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [4418] QuantumAMMPool::getReserves() [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 1000000000000000000000 [1e21], 1000000000000000000000 [1e21]
+    Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [14792] MockToken::transferFrom(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], 10000000000000000000 [1e19])
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, to: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], value: 10000000000000000000 [1e19])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γö£ΓöÇ [623] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9::getPool(MockToken: [0xC6077e354F5edf9ebABE1467A3B57A97224Cf6Ea], MockToken: [0x93a54bb8dB627Df480f19Db639d077670AFc18fa]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]
+    Γö£ΓöÇ [34480] QuantumAMMPool::swap(9871580343970612988 [9.871e18], 0, 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 0x)
+    Γöé   Γö£ΓöÇ [12508] MockToken::transfer(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, 9871580343970612988 [9.871e18])
+    Γöé   Γöé   Γö£ΓöÇ emit Transfer(from: QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b], to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE, value: 9871580343970612988 [9.871e18])
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] true
+    Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 990128419656029387012 [9.901e20]
+    Γöé   Γö£ΓöÇ [515] MockToken::balanceOf(QuantumAMMPool: [0xCca5396f983152C43ED9f8773B7942042Db2886b]) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 1010000000000000000000 [1.01e21]
+    Γöé   Γö£ΓöÇ [2555] 0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec::isRegistered(0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE) [staticcall]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] false
+    Γöé   Γö£ΓöÇ emit Sync(reserve0: 990128419656029387012 [9.901e20], reserve1: 1010000000000000000000 [1.01e21])
+    Γöé   Γö£ΓöÇ emit Swap(sender: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722, amount0In: 0, amount1In: 10000000000000000000 [1e19], amount0Out: 9871580343970612988 [9.871e18], amount1Out: 0, to: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    ΓööΓöÇ ΓåÉ [Return] [10000000000000000000 [1e19], 9871580343970612988 [9.871e18]]
+
+
+==========================
+
+Chain 11155111
+
+Estimated gas price: 1.830531322 gwei
+
+Estimated total gas used for script: 4177186
+
+Estimated amount required: 0.007646469810819892 ETH
+
+==========================
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: C:/PC/hackmoney/contracts/broadcast\VerifyFlow.s.sol\11155111\run-latest.json
+
+Sensitive values saved to: C:/PC/hackmoney/contracts/cache\VerifyFlow.s.sol\11155111\run-latest.json
+

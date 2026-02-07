@@ -170,7 +170,7 @@ contract QuantumAccount is IAccount {
      * @param data Calldata
      */
     function _call(address target, uint256 value, bytes memory data) internal {
-        (bool success, bytes memory result) = target.call{value: value}(data);
+        (bool success, bytes memory result) = target.call{value: value, gas: gasleft()}(data);
         if (!success) {
             // Bubble up the revert reason
             assembly {

@@ -5,17 +5,16 @@
 // Contract addresses (will be updated after deployment)
 // Contract addresses (will be updated after deployment)
 export const CONFIG = {
-  // Sepolia (Redeployed 2026-02-05 with Router.initialize)
+  // Sepolia (Refactored Architecture v2.0.0)
   CHAIN_ID: 11155111,
   RPC_URL: "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
 
   // Addresses (lowercase to avoid checksum issues)
-  QUANTUM_REGISTRY_ADDRESS: "0x0e66D5f39752591ff55d52F1284688Cc6bFaBaF0", // QuantumSystem
-  QUANTUM_ACCOUNT_FACTORY_ADDRESS: "0x0e66D5f39752591ff55d52F1284688Cc6bFaBaF0", // QuantumSystem
-  HACKATHON_PAYMASTER_ADDRESS: "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96",
-  POOL_MANAGER_ADDRESS: "0x17D6609F2c90D2d01E1C7c72944d85a343267A8C",
-  QUANTUM_HOOK: "0x0B2A4E66865814357B27F4fF8d854F1E46226A80",
-  QUANTUM_POOL_ROUTER: "0x52d1955AC7CF442DE9D33fc91510008EddA9ab14", // QuantumLiquidityEngine
+  QUANTUM_REGISTRY_ADDRESS: "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec".toLowerCase(), // QuantumSystem
+  QUANTUM_ACCOUNT_FACTORY_ADDRESS: "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec".toLowerCase(), // QuantumSystem
+  GROTH16_VERIFIER_ADDRESS: "0x38078D4755172A9047B190CCE2eC614D242ACb77".toLowerCase(),
+  HACKATHON_PAYMASTER_ADDRESS: "0x71877b35abc4d002ffe6ecc32e7c02febbc9fc96", // Unchanged
+  QUANTUM_AMM_ROUTER: "0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722".toLowerCase(), // QuantumAMMRouter
   ENTRYPOINT_ADDRESS: "0x0000000071727de22e5e9d8baf0edac6f37da032",
 
   // Bundler

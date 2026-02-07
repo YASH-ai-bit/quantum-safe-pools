@@ -33,7 +33,7 @@ import { CONFIG } from './config';
 
 export const ENTRYPOINT_ADDRESS = CONFIG.ENTRYPOINT_ADDRESS; // v0.7 EntryPoint
 export const FACTORY_ADDRESS = CONFIG.QUANTUM_ACCOUNT_FACTORY_ADDRESS; // QuantumAccountFactory
-export const VERIFIER_ADDRESS = "0x605556E6b4fca8021dEBeb7E76328BE3d8dd29Ab"; // Hardcoded for now, or add to CONFIG
+export const VERIFIER_ADDRESS = CONFIG.GROTH16_VERIFIER_ADDRESS;
 export const REGISTRY_ADDRESS = CONFIG.QUANTUM_REGISTRY_ADDRESS; // QuantumRegistry
 
 // Default ABI coder instance
@@ -560,9 +560,12 @@ export async function constructUserOp(params: {
 
   // Explicit v0.7 gas limits
   const gasFees = packGasFees(maxPriorityFeePerGas, maxFeePerGas);
-  const verificationGasLimit = 1_000_000n;
-  const callGasLimit = 1_000_000n;
-  const preVerificationGas = 200_000n; // Increased from 100k - bundler requires ~122k+
+
+  // Pool creation takes ~1.6M gas alone. Batching adds more.
+  // Setting high limits (5M) for safety during hackathon/dev.
+  const verificationGasLimit = 5_000_000n;
+  const callGasLimit = 5_000_000n;
+  const preVerificationGas = 500_000n; // Increased to be safe
 
   const accountGasLimits = packAccountGasLimits(
     verificationGasLimit,

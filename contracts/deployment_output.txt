@@ -1,0 +1,192 @@
+Compiling 4 files with Solc 0.8.28
+Solc 0.8.28 finished in 2.98s
+Compiler run successful with warnings:
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/QuantumAMMPool.sol:97:71:
+   |
+97 |     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external {
+   |                                                                       ^^^^^^^^^^^^^^^^^^^
+
+Warning (2072): Unused local variable.
+  --> script/DeployQuantum.s.sol:20:9:
+   |
+20 |         address deployer = vm.addr(deployerPrivateKey);
+   |         ^^^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to pure
+  --> src/MockGroth16Verifier.sol:21:5:
+   |
+21 |     function verify(
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to view
+  --> src/QuantumAMMRouter.sol:31:5:
+   |
+31 |     function _addLiquidity(
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Traces:
+  [3881915] DeployQuantum::run()
+    Γö£ΓöÇ [0] VM::envUint("PRIVATE_KEY") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] <env var value>
+    Γö£ΓöÇ [0] VM::addr(<pk>) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE
+    Γö£ΓöÇ [0] VM::startBroadcast(<pk>)
+    Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γö£ΓöÇ [76529] ΓåÆ new MockGroth16Verifier@0x38078D4755172A9047B190CCE2eC614D242ACb77
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 382 bytes of code
+    Γö£ΓöÇ [0] console::log("MockGroth16Verifier deployed at:", MockGroth16Verifier: [0x38078D4755172A9047B190CCE2eC614D242ACb77]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [900383] ΓåÆ new QuantumSystem@0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec
+    Γöé   Γö£ΓöÇ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 4377 bytes of code
+    Γö£ΓöÇ [0] console::log("QuantumSystem deployed at:", QuantumSystem: [0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [1806547] ΓåÆ new QuantumAMMFactory@0xE5acFcC6bf0BB0f64204775526E033C76d2130a9
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 9022 bytes of code
+    Γö£ΓöÇ [0] console::log("QuantumAMMFactory deployed at:", QuantumAMMFactory: [0xE5acFcC6bf0BB0f64204775526E033C76d2130a9]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [956631] ΓåÆ new QuantumAMMRouter@0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 4776 bytes of code
+    Γö£ΓöÇ [0] console::log("QuantumAMMRouter deployed at:", QuantumAMMRouter: [0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] VM::stopBroadcast()
+    Γöé   ΓööΓöÇ ΓåÉ [Return]
+    ΓööΓöÇ ΓåÉ [Return]
+
+
+Script ran successfully.
+
+== Logs ==
+  MockGroth16Verifier deployed at: 0x38078D4755172A9047B190CCE2eC614D242ACb77
+  QuantumSystem deployed at: 0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec
+  QuantumAMMFactory deployed at: 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9
+  QuantumAMMRouter deployed at: 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722
+
+## Setting up 1 EVM.
+==========================
+Simulated On-chain Traces:
+
+  [76529] ΓåÆ new MockGroth16Verifier@0x38078D4755172A9047B190CCE2eC614D242ACb77
+    ΓööΓöÇ ΓåÉ [Return] 382 bytes of code
+
+  [900383] ΓåÆ new QuantumSystem@0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec
+    Γö£ΓöÇ emit OwnershipTransferred(previousOwner: 0x0000000000000000000000000000000000000000, newOwner: 0x4b39D7EE758332a43772f4192B9b864C2Cc4A6eE)
+    ΓööΓöÇ ΓåÉ [Return] 4377 bytes of code
+
+  [1806547] ΓåÆ new QuantumAMMFactory@0xE5acFcC6bf0BB0f64204775526E033C76d2130a9
+    ΓööΓöÇ ΓåÉ [Return] 9022 bytes of code
+
+  [956631] ΓåÆ new QuantumAMMRouter@0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722
+    ΓööΓöÇ ΓåÉ [Return] 4776 bytes of code
+
+
+==========================
+
+Chain 11155111
+
+Estimated gas price: 2.000677032 gwei
+
+Estimated total gas used for script: 5522040
+
+Estimated amount required: 0.01104781859778528 ETH
+
+==========================
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+##
+Start verification for (4) contracts
+Start verifying contract `0x38078D4755172A9047B190CCE2eC614D242ACb77` deployed on sepolia
+EVM version: cancun
+Compiler version: 0.8.28
+Optimizations:    200
+
+Submitting verification for [src/MockGroth16Verifier.sol:MockGroth16Verifier] 0x38078D4755172A9047B190CCE2eC614D242ACb77.
+Warning: Could not detect deployment: Unable to locate ContractCode at 0x38078d4755172a9047b190cce2ec614d242acb77; waiting 5 seconds before trying again (4 tries remaining)
+
+Submitting verification for [src/MockGroth16Verifier.sol:MockGroth16Verifier] 0x38078D4755172A9047B190CCE2eC614D242ACb77.
+Warning: Could not detect deployment: Unable to locate ContractCode at 0x38078d4755172a9047b190cce2ec614d242acb77; waiting 5 seconds before trying again (3 tries remaining)
+
+Submitting verification for [src/MockGroth16Verifier.sol:MockGroth16Verifier] 0x38078D4755172A9047B190CCE2eC614D242ACb77.
+Warning: Could not detect deployment: Unable to locate ContractCode at 0x38078d4755172a9047b190cce2ec614d242acb77; waiting 5 seconds before trying again (2 tries remaining)
+
+Submitting verification for [src/MockGroth16Verifier.sol:MockGroth16Verifier] 0x38078D4755172A9047B190CCE2eC614D242ACb77.
+Warning: Could not detect deployment: Unable to locate ContractCode at 0x38078d4755172a9047b190cce2ec614d242acb77; waiting 5 seconds before trying again (1 tries remaining)
+
+Submitting verification for [src/MockGroth16Verifier.sol:MockGroth16Verifier] 0x38078D4755172A9047B190CCE2eC614D242ACb77.
+Submitted contract for verification:
+	Response: `OK`
+	GUID: `mtr64k2rcvcuhy94v11gvad6zwpcmrnzapbh4p1j6vgvb3mkrr`
+	URL: https://sepolia.etherscan.io/address/0x38078d4755172a9047b190cce2ec614d242acb77
+Contract verification status:
+Response: `NOTOK`
+Details: `Pending in queue`
+Warning: Verification is still pending...; waiting 15 seconds before trying again (7 tries remaining)
+Contract verification status:
+Response: `NOTOK`
+Details: `Already Verified`
+Contract source code already verified
+Start verifying contract `0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec` deployed on sepolia
+EVM version: cancun
+Compiler version: 0.8.28
+Optimizations:    200
+Constructor args: 0000000000000000000000000000000071727de22e5e9d8baf0edac6f37da03200000000000000000000000038078d4755172a9047b190cce2ec614d242acb77
+
+Submitting verification for [src/QuantumSystem.sol:QuantumSystem] 0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec.
+Submitted contract for verification:
+	Response: `OK`
+	GUID: `hbbincfk77xr4mh3jintz6zhb1uiuxa4kw9cxrbztjitmgrjd8`
+	URL: https://sepolia.etherscan.io/address/0x2335b55cc5edfff0fa78e2a749c1b2a66ff8b4ec
+Contract verification status:
+Response: `NOTOK`
+Details: `Fail - Unable to verify. Compiled contract deployment bytecode does NOT match the transaction deployment bytecode.`
+Error: Failed to verify contract: Checking verification result failed; Contract verification failed:
+Status: `0`
+Result: `Fail - Unable to verify. Compiled contract deployment bytecode does NOT match the transaction deployment bytecode.`
+Start verifying contract `0xE5acFcC6bf0BB0f64204775526E033C76d2130a9` deployed on sepolia
+EVM version: cancun
+Compiler version: 0.8.28
+Optimizations:    200
+Constructor args: 0000000000000000000000002335b55cc5edfff0fa78e2a749c1b2a66ff8b4ec
+
+Submitting verification for [src/QuantumAMMFactory.sol:QuantumAMMFactory] 0xE5acFcC6bf0BB0f64204775526E033C76d2130a9.
+Submitted contract for verification:
+	Response: `OK`
+	GUID: `i4yqsbbj8n9wqaxufac55thpzgp6vu9a5lex5mdzsejnrvuznt`
+	URL: https://sepolia.etherscan.io/address/0xe5acfcc6bf0bb0f64204775526e033c76d2130a9
+Contract verification status:
+Response: `NOTOK`
+Details: `Pending in queue`
+Warning: Verification is still pending...; waiting 15 seconds before trying again (7 tries remaining)
+Contract verification status:
+Response: `OK`
+Details: `Pass - Verified`
+Contract successfully verified
+Start verifying contract `0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722` deployed on sepolia
+EVM version: cancun
+Compiler version: 0.8.28
+Optimizations:    200
+Constructor args: 000000000000000000000000e5acfcc6bf0bb0f64204775526e033c76d2130a9000000000000000000000000fff9976782d46cc05630d1f6ebab18b2324d6b14
+
+Submitting verification for [src/QuantumAMMRouter.sol:QuantumAMMRouter] 0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722.
+Submitted contract for verification:
+	Response: `OK`
+	GUID: `2h784fmaqbd5ndezs4vzpjweesjupwcqjdtr3xizbvwtmnqv9s`
+	URL: https://sepolia.etherscan.io/address/0xa9ebc6aefe13d9e93bcba94afe54e513bb730722
+Contract verification status:
+Response: `NOTOK`
+Details: `Pending in queue`
+Warning: Verification is still pending...; waiting 15 seconds before trying again (7 tries remaining)
+Contract verification status:
+Response: `OK`
+Details: `Pass - Verified`
+Contract successfully verified
+
+Transactions saved to: C:/PC/hackmoney/contracts/broadcast\DeployQuantum.s.sol\11155111\run-latest.json
+
+Sensitive values saved to: C:/PC/hackmoney/contracts/cache\DeployQuantum.s.sol\11155111\run-latest.json
+
+Error: Not all (3 / 4) contracts were verified!
