@@ -12,9 +12,9 @@ export default function Header() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <img 
-              src="/logo.svg" 
-              alt="Quantum Vault Logo" 
+            <img
+              src="/logo.svg"
+              alt="Quantum Vault Logo"
               className="w-10 h-10"
             />
             <span className="text-xl font-bold pixel-text hidden sm:inline text-primary">
@@ -35,6 +35,9 @@ export default function Header() {
             </Link>
             <Link to="/create-pool" className="text-foreground hover:text-primary transition pixel-text text-sm">
               $ create
+            </Link>
+            <Link to="/wallet" className="text-foreground hover:text-primary transition pixel-text text-sm">
+              $ wallet
             </Link>
           </nav>
 
@@ -78,6 +81,12 @@ export default function Header() {
               className="block px-4 py-2 text-foreground hover:text-primary transition hover:bg-primary/20 border border-primary pixel-text text-sm"
             >
               $ create
+            </Link>
+            <Link
+              to="/wallet"
+              className="block px-4 py-2 text-foreground hover:text-primary transition hover:bg-primary/20 border border-primary pixel-text text-sm"
+            >
+              $ wallet
             </Link>
             <div className="px-2">
               <ConnectSnapButton />

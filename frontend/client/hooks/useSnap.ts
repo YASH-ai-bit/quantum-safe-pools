@@ -230,8 +230,8 @@ export function useSnap() {
             request: {
               method: "quantum_getAccountAddress",
               params: {
-                factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
-                rpcUrl: RPC_URLS.SEPOLIA,
+                factoryAddress: CONTRACTS?.QUANTUM_SYSTEM || "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
+                rpcUrl: RPC_URLS?.SEPOLIA || "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
               },
             },
           },
@@ -315,10 +315,10 @@ export function useSnap() {
               to,
               value,
               data,
-              factoryAddress: CONTRACTS.QUANTUM_ACCOUNT_FACTORY,
-              rpcUrl: RPC_URLS.SEPOLIA,
-              chainId: CHAIN_ID.SEPOLIA,
-              paymasterAddress: CONTRACTS.HACKATHON_PAYMASTER,
+              factoryAddress: CONTRACTS?.QUANTUM_SYSTEM || "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
+              rpcUrl: RPC_URLS?.SEPOLIA || "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
+              chainId: CHAIN_ID?.SEPOLIA || 11155111,
+              paymasterAddress: CONTRACTS?.HACKATHON_PAYMASTER || "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96",
             },
           },
         },
@@ -433,6 +433,98 @@ export function useSnap() {
     setError(null);
   }, [snapState.isFlask, snapState.isInstalled]);
 
+  // Batch multiple transactions into a single UserOp (single signature!)
+  // Perfect for pool creation: init + approve + approve + addLiquidity
+  const batchTransactions = async (
+    transactions: Array<{ to: string; value: string; data: string }>
+  ) => {
+    if (!snapState.isConnected) {
+      throw new Error("Snap not connected");
+    }
+
+    const provider = getFlaskProvider();
+    if (!provider) throw new Error("Flask provider not found");
+
+    try {
+      console.log(
+        "%c[SNAP] Sending batch quantum-safe transaction...",
+        "color: #00ff00; font-weight: bold;"
+      );
+      console.log(
+        "%c[SNAP] Batch size:",
+        "color: #00ff00;",
+        transactions.length
+      );
+
+      const result: any = await provider.request({
+        method: "wallet_invokeSnap",
+        params: {
+          snapId: SNAP_ID,
+          request: {
+            method: "quantum_batchTransactions",
+            params: {
+              transactions,
+              factoryAddress: CONTRACTS?.QUANTUM_SYSTEM || "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
+              rpcUrl: RPC_URLS?.SEPOLIA || "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
+              chainId: CHAIN_ID?.SEPOLIA || 11155111,
+              paymasterAddress: CONTRACTS?.HACKATHON_PAYMASTER || "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96",
+            },
+          },
+        },
+      });
+
+      // Display snap logs in browser console with yellow styling
+      if (result?.logs && Array.isArray(result.logs)) {
+        console.log(
+          "%c========== SNAP BATCH LOGS ==========",
+          "color: #ffff00; font-weight: bold; font-size: 14px;"
+        );
+        result.logs.forEach((log: string) => {
+          console.log(`%c${log}`, "color: #ffff00;");
+        });
+        console.log(
+          "%c=====================================",
+          "color: #ffff00; font-weight: bold; font-size: 14px;"
+        );
+      }
+
+      if (result.error) {
+        console.error(
+          "%c[SNAP] ❌ Batch transaction failed:",
+          "color: #ff0000; font-weight: bold;",
+          result.error
+        );
+        throw new Error(result.error);
+      }
+
+      if (result.success && result.transactionHash) {
+        console.log(
+          "%c[SNAP] ✅ Batch transaction confirmed!",
+          "color: #00ff00; font-weight: bold;"
+        );
+        console.log(
+          "%c[SNAP] Transaction hash:",
+          "color: #00ff00;",
+          result.transactionHash
+        );
+        console.log(
+          "%c[SNAP] Operations batched:",
+          "color: #00ff00;",
+          result.batchSize
+        );
+      }
+
+      return result;
+    } catch (err) {
+      console.error(
+        "%c[SNAP] ❌ Batch transaction failed:",
+        "color: #ff0000; font-weight: bold;",
+        err
+      );
+      throw err;
+    }
+  };
+
   return {
     ...snapState,
     loading,
@@ -441,6 +533,7 @@ export function useSnap() {
     disconnectSnap,
     signMessage,
     sendTransaction,
+    batchTransactions,
     refreshData: loadSnapData,
   };
 }

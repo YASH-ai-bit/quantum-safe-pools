@@ -90,6 +90,10 @@ export const onRpcRequest: OnRpcRequestHandler = async ({
     case 'quantum_sendTransaction':
       return await handleSendTransaction(origin, request.params);
 
+    // Batch multiple transactions into a single UserOp (single signature!)
+    case 'quantum_batchTransactions':
+      return await handleBatchTransactions(origin, request.params);
+
     default:
       throw new Error(`Method not found: ${request.method}`);
   }
@@ -455,13 +459,106 @@ async function handleSendTransaction(origin: string, params: any) {
     paymasterAddress,
   });
 
+
+  // Fetch gas prices from Pimlico bundler for accurate pricing
+  const bundlerUrl =
+    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
+  logYellow('Fetching gas prices from Pimlico...');
+  const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
+
+  // ------------------------------------------------------------------
+  //  RICH DECODING LOGIC (The "Informative Signing" Feature)
+  // ------------------------------------------------------------------
+  let actionDescription = 'Unknown Action';
+  let detailedContent = <Text>Unable to decode transaction data.</Text>;
+
+  try {
+    if (data && data !== '0x') {
+      const { ROUTER_ABI, ERC20_ABI } = await import('./abis');
+      const routerInterface = new Interface(ROUTER_ABI);
+      const erc20Interface = new Interface(ERC20_ABI);
+
+      // Attempt to decode as Router Call
+      try {
+        const decoded = routerInterface.parseTransaction({ data });
+        if (decoded) {
+          if (decoded.name === 'createPool') {
+            const [tokenA, tokenB] = decoded.args;
+            actionDescription = 'Create Pool';
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Create Quantum Pool</Text>
+                <Text><Bold>Token A:</Bold> {tokenA}</Text>
+                <Text><Bold>Token B:</Bold> {tokenB}</Text>
+              </Box>
+            );
+          } else if (decoded.name === 'addLiquidity') {
+            actionDescription = 'Add Liquidity';
+            const [tokenA, tokenB, amountADesired, amountBDesired] = decoded.args;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Add Liquidity</Text>
+                <Text><Bold>Token A:</Bold> {tokenA}</Text>
+                <Text><Bold>Token B:</Bold> {tokenB}</Text>
+                <Text><Bold>Amount A:</Bold> {amountADesired.toString()}</Text>
+                <Text><Bold>Amount B:</Bold> {amountBDesired.toString()}</Text>
+              </Box>
+            );
+          } else if (decoded.name === 'removeLiquidity') {
+            actionDescription = 'Remove Liquidity';
+            const [tokenA, tokenB, liquidity] = decoded.args;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Remove Liquidity</Text>
+                <Text><Bold>Token A:</Bold> {tokenA}</Text>
+                <Text><Bold>Token B:</Bold> {tokenB}</Text>
+                <Text><Bold>Liquidity Burned:</Bold> {liquidity.toString()}</Text>
+              </Box>
+            );
+          } else if (decoded.name === 'swapExactTokensForTokens') {
+            actionDescription = 'Swap (Quantum)';
+            const [amountIn, amountOutMin, path] = decoded.args;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Action:</Bold> Swap</Text>
+                <Text><Bold>Amount In:</Bold> {amountIn.toString()}</Text>
+                <Text><Bold>Min Amount Out:</Bold> {amountOutMin.toString()}</Text>
+                <Text><Bold>Path:</Bold> {path.join(' -> ')}</Text>
+              </Box>
+            );
+          } else {
+            actionDescription = decoded.name; // Fallback for other methods
+          }
+        }
+      } catch (e) {
+        // Not a router call, try ERC20
+        try {
+          const decoded = erc20Interface.parseTransaction({ data });
+          if (decoded) {
+            actionDescription = `${decoded.name} (ERC20)`;
+            detailedContent = (
+              <Box>
+                <Text><Bold>Spender:</Bold> {decoded.args[0]}</Text>
+                <Text><Bold>Amount:</Bold> {decoded.args[1].toString()}</Text>
+              </Box>
+            );
+          }
+        } catch (e2) {
+          // Failed both
+        }
+      }
+    }
+  } catch (err) {
+    logYellow('Decoding failed', { err });
+  }
+
+  // Calculate account address (moved up if needed, but safe here)
   await ensureKeypairExists();
 
   const publicKeyHash = await getPublicKeyHash();
   const salt = await getAccountSalt();
   const provider = new JsonRpcProvider(rpcUrl);
 
-  // Calculate account address
   const accountAddress = await calculateAccountAddress(
     publicKeyHash,
     salt,
@@ -471,14 +568,16 @@ async function handleSendTransaction(origin: string, params: any) {
 
   const deployed = await isAccountDeployed(accountAddress, provider);
 
-  // Show confirmation dialog
+  // Show confirmation dialog with RICH DATA
   const approved = await snap.request({
     method: 'snap_dialog',
     params: {
       type: 'confirmation',
       content: (
         <Box>
-          <Heading>🔐 Quantum-Safe Transaction</Heading>
+          <Heading>🔐 {actionDescription}</Heading>
+          <Divider />
+          {detailedContent}
           <Divider />
           <Text>
             <Bold>From:</Bold>
@@ -488,20 +587,12 @@ async function handleSendTransaction(origin: string, params: any) {
             <Bold>To:</Bold>
           </Text>
           <Copyable value={to} />
+          <Divider />
           <Text>
             <Bold>Value:</Bold> {formatEther(value || 0)} ETH
           </Text>
           <Text>
-            <Bold>Account Status:</Bold>{' '}
-            {deployed ? 'Deployed ✅' : 'Not deployed (will deploy)'}
-          </Text>
-          <Divider />
-          <Text>
             <Bold>Origin:</Bold> {origin}
-          </Text>
-          <Text>
-            This transaction will be signed with your quantum-safe Dilithium
-            key.
           </Text>
         </Box>
       ),
@@ -515,29 +606,70 @@ async function handleSendTransaction(origin: string, params: any) {
   // Check if account is deployed and registered
   await isAccountDeployed(accountAddress, provider); // Just to warm up cache if needed
 
-  // CRITICAL FIX: RPC Lag Prevention
-  // Fetch pending nonce. If > 0, account exists and has likely interacted.
-  // We assume it's registered to avoid batching "register" call again, which causes AA25 errors.
+  // CRITICAL FIX: Multi-layer registration check to prevent AA25 errors
+  // Priority order:
+  // 1. Check snap state (isRegistered flag) - fastest, persists across sessions
+  // 2. Check pending nonce > 0 - indicates account has transacted (likely registered)
+  // 3. Check on-chain registry - definitive but can lag behind mempool
+
+  const state = (await snap.request({
+    method: 'snap_manageState',
+    params: { operation: 'get' },
+  })) as any;
+
   let isSafe = false;
-  try {
-    // @ts-ignore - getAccountNonce updated to accept blockTag
-    const pendingNonce = await getAccountNonce(accountAddress, provider, 'pending');
-    if (pendingNonce > 0n) {
-      logYellow('Account has pending nonce > 0. Assuming registered.', { nonce: pendingNonce.toString() });
-      isSafe = true;
-    } else {
-      isSafe = await isRegistered(accountAddress, provider);
+
+  // Layer 1: Check persistent snap state
+  if (state?.isRegistered === true) {
+    logYellow('Account marked as registered in snap state. Skipping registration batch.');
+    isSafe = true;
+  }
+
+  // Layer 2: Check nonce if not already marked
+  if (!isSafe) {
+    try {
+      const pendingNonce = await getAccountNonce(accountAddress, provider, 'pending');
+      if (pendingNonce > 0n) {
+        logYellow('Account has pending nonce > 0. Assuming registered.', { nonce: pendingNonce.toString() });
+        isSafe = true;
+        // Also persist this for future calls
+        await snap.request({
+          method: 'snap_manageState',
+          params: {
+            operation: 'update',
+            newState: { ...state, isRegistered: true },
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('Error checking pending nonce:', err);
     }
-  } catch (err) {
-    console.warn('Error checking nonce/registry:', err);
-    isSafe = await isRegistered(accountAddress, provider);
+  }
+
+  // Layer 3: Check on-chain registry
+  if (!isSafe) {
+    try {
+      isSafe = await isRegistered(accountAddress, provider);
+      if (isSafe) {
+        // Persist for future calls
+        await snap.request({
+          method: 'snap_manageState',
+          params: {
+            operation: 'update',
+            newState: { ...state, isRegistered: true },
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('Error checking registry:', err);
+    }
   }
 
   let useBatch = false;
   let batchCallData = '0x';
 
-  if (!isSafe) {
-    logYellow('Account not registered. Batching registration...', {
+  if (!isSafe && deployed) {
+    logYellow('Account deployed but not registered. Batching registration...', {
       accountAddress,
     });
     useBatch = true;
@@ -554,13 +686,11 @@ async function handleSendTransaction(origin: string, params: any) {
       [0n, BigInt(value || 0)],
       [registerData, data || '0x'],
     );
+  } else if (!isSafe && !deployed) {
+    logYellow('Account not deployed. Registration will be handled effectively by initCode (createAccount).');
   }
 
-  // Fetch gas prices from Pimlico bundler for accurate pricing
-  const bundlerUrl =
-    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
-  logYellow('Fetching gas prices from Pimlico...');
-  const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
+
 
   // Construct UserOperation via SDK-optimized helper
   logYellow('Constructing UserOp for transaction...', { to, value, useBatch });
@@ -684,6 +814,13 @@ async function handleSendTransaction(origin: string, params: any) {
 
       if (receiptResult.result) {
         receipt = receiptResult.result;
+
+        // Check for UserOp execution success
+        if (receipt.success === false) {
+          const reason = receipt.reason || 'Transaction reverted during execution';
+          throw new Error(reason);
+        }
+
         logYellow('Transaction confirmed!', {
           txHash: receipt.receipt.transactionHash,
           blockNumber: receipt.receipt.blockNumber,
@@ -697,6 +834,24 @@ async function handleSendTransaction(origin: string, params: any) {
 
     if (!receipt) {
       throw new Error('Transaction not confirmed after 2 minutes');
+    }
+
+    // CRITICAL: If this was a batch transaction that included registration, 
+    // mark registration as complete in snap state to prevent future re-registration attempts
+    if (useBatch) {
+      logYellow('Batch transaction confirmed. Marking account as registered in snap state.');
+      const currentState = (await snap.request({
+        method: 'snap_manageState',
+        params: { operation: 'get' },
+      })) as any;
+
+      await snap.request({
+        method: 'snap_manageState',
+        params: {
+          operation: 'update',
+          newState: { ...currentState, isRegistered: true },
+        },
+      });
     }
 
     return {
@@ -714,6 +869,271 @@ async function handleSendTransaction(origin: string, params: any) {
     // This allows the frontend to try submitting it
     return {
       userOp,
+      userOpHash,
+      accountAddress,
+      logs: [...snapLogs],
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Handle batch transactions - multiple calls in a single UserOp (single signature!)
+ * This is ideal for pool creation: init + approve + approve + addLiquidity
+ */
+async function handleBatchTransactions(
+  origin: string,
+  params: any,
+): Promise<any> {
+  const {
+    transactions, // Array of { to, value, data }
+    factoryAddress,
+    rpcUrl,
+    chainId,
+    paymasterAddress,
+  } = params;
+
+  if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+    throw new Error('transactions array is required');
+  }
+
+  logYellow('handleBatchTransactions called', {
+    transactionCount: transactions.length,
+    factoryAddress,
+    chainId,
+  });
+
+  // Ensure keypair exists
+  await ensureKeypairExists();
+
+  const provider = new JsonRpcProvider(rpcUrl);
+  const publicKeyHash = await getPublicKeyHash();
+  const salt = await getAccountSalt();
+
+  // Calculate account address
+  const accountAddress = await calculateAccountAddress(
+    publicKeyHash,
+    salt,
+    factoryAddress,
+    provider,
+  );
+
+  logYellow('Batch execution for account', { accountAddress, txCount: transactions.length });
+
+  // Show user confirmation dialog
+  const txCount = String(transactions.length);
+  const shortAddress = accountAddress.slice(0, 20) + '...';
+
+  // Show minimal confirmation - MetaMask Snap UI is very strict
+  const confirmed = await snap.request({
+    method: 'snap_dialog',
+    params: {
+      type: 'confirmation',
+      content: (
+        <Box>
+          <Heading>Batch Transaction</Heading>
+          <Text>Approve multiple operations in one signature</Text>
+        </Box>
+      ),
+    },
+  });
+
+  if (!confirmed) {
+    throw new Error('User rejected batch transaction');
+  }
+
+  // Prepare batch execution data
+  const targets = transactions.map((tx: any) => tx.to);
+  const values = transactions.map((tx: any) => BigInt(tx.value || 0));
+  const datas = transactions.map((tx: any) => tx.data || '0x');
+
+  const batchCallData = encodeBatchExecution(targets, values, datas);
+
+  logYellow('Batch encoded', {
+    targets: targets.length,
+    callDataLength: batchCallData.length
+  });
+
+  // Check if account is registered (for first-time users, include registration)
+  let isSafe = false;
+  const currentState = (await snap.request({
+    method: 'snap_manageState',
+    params: { operation: 'get' },
+  })) as any;
+
+  if (currentState?.isRegistered === true) {
+    logYellow('Account already registered (from snap state)');
+    isSafe = true;
+  } else {
+    // Check on-chain
+    try {
+      isSafe = await isRegistered(accountAddress, provider);
+      if (isSafe && currentState) {
+        await snap.request({
+          method: 'snap_manageState',
+          params: {
+            operation: 'update',
+            newState: { ...currentState, isRegistered: true },
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('Error checking registry:', err);
+    }
+  }
+
+  // Check if deployed to decide on registration
+  const deployed = await isAccountDeployed(accountAddress, provider);
+
+  // Default to original batch data
+  let finalBatchCallData = batchCallData;
+
+  // If not registered AND deployed, prepend registration to batch
+  // (If not deployed, createAccount will handle it)
+  if (!isSafe && deployed) {
+    logYellow('Account deployed but not registered. Adding registration to batch...');
+
+    const registryInterface = new Interface([
+      'function register(bytes32 publicKeyHash)',
+    ]);
+    const registerData = registryInterface.encodeFunctionData('register', [
+      publicKeyHash,
+    ]);
+
+    // Prepend registration to batch
+    const allTargets = [REGISTRY_ADDRESS, ...targets];
+    const allValues = [0n, ...values];
+    const allDatas = [registerData, ...datas];
+
+    finalBatchCallData = encodeBatchExecution(allTargets, allValues, allDatas);
+    logYellow('Registration added to batch');
+  }
+
+  // Fetch gas prices
+  const bundlerUrl =
+    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
+  logYellow('Fetching gas prices from Pimlico...');
+  const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
+
+  // Construct UserOperation with batch callData
+  logYellow('Constructing batch UserOp...');
+  const userOp = await constructUserOp({
+    accountAddress,
+    target: accountAddress, // Target doesn't matter for batch, callData is pre-encoded
+    value: 0n,
+    data: '0x',
+    callData: finalBatchCallData,
+    provider,
+    publicKeyHash,
+    salt,
+    factoryAddress,
+    paymasterAddress,
+    gasPrices,
+  });
+
+  // Calculate userOpHash and sign
+  const userOpHash = getUserOpHash(userOp, chainId);
+  logYellow('Batch UserOp constructed', { userOpHash });
+
+  const userOpHashBytes = getBytes(userOpHash);
+  const dilithiumSignature = await signMessage(userOpHashBytes);
+  userOp.signature = `0x${Buffer.from(dilithiumSignature).toString('hex')}`;
+
+  logYellow('Batch transaction signed', {
+    signatureLength: dilithiumSignature.length,
+    batchSize: transactions.length,
+  });
+
+  // Submit to bundler
+  logYellow('Submitting batch UserOp to bundler...');
+  try {
+    const jsonUserOp = packedToJsonUserOp(userOp);
+    const response = await fetch(bundlerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_sendUserOperation',
+        params: [jsonUserOp, ENTRYPOINT_ADDRESS],
+        id: Date.now(),
+      }),
+    });
+
+    const result = await response.json();
+    if (result.error) {
+      throw new Error(`Bundler error: ${JSON.stringify(result.error)}`);
+    }
+
+    const submittedUserOpHash = result.result;
+    logYellow('Batch UserOp submitted', { userOpHash: submittedUserOpHash });
+
+    // Wait for confirmation
+    logYellow('Waiting for batch transaction confirmation...');
+    let receipt = null;
+    for (let i = 0; i < 60; i++) {
+      const receiptResponse = await fetch(bundlerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getUserOperationReceipt',
+          params: [submittedUserOpHash],
+          id: Date.now(),
+        }),
+      });
+
+      const receiptResult = await receiptResponse.json();
+      if (receiptResult.result) {
+        receipt = receiptResult.result;
+
+        // Check for UserOp execution success
+        if (receipt.success === false) {
+          const reason = receipt.reason || 'Transaction reverted during execution';
+          throw new Error(reason);
+        }
+
+        logYellow('Transaction confirmed!', {
+          txHash: receipt.receipt.transactionHash,
+          blockNumber: receipt.receipt.blockNumber,
+        });
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    if (!receipt) {
+      throw new Error('Batch transaction not confirmed after 2 minutes');
+    }
+
+    logYellow('Batch transaction confirmed!', {
+      txHash: receipt.receipt.transactionHash,
+      batchSize: transactions.length,
+    });
+
+    // Mark as registered if we included registration
+    if (!isSafe && currentState) {
+      await snap.request({
+        method: 'snap_manageState',
+        params: {
+          operation: 'update',
+          newState: { ...currentState, isRegistered: true },
+        },
+      });
+    }
+
+    return {
+      success: true,
+      userOpHash: submittedUserOpHash,
+      transactionHash: receipt.receipt.transactionHash,
+      accountAddress,
+      batchSize: transactions.length,
+      logs: [...snapLogs],
+    };
+  } catch (error: any) {
+    logYellow('Batch submission failed', { error: error.message });
+    return {
+      success: false,
       userOpHash,
       accountAddress,
       logs: [...snapLogs],

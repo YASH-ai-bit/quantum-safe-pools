@@ -29,10 +29,12 @@ export function hexConcat(items: string[]): string {
  * IMPORTANT: Keep in sync with frontend/shared/contracts.ts
  * Updated 2025-01-02 with correct EntryPoint!
  */
-export const ENTRYPOINT_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // v0.7 EntryPoint
-export const FACTORY_ADDRESS = '0xFCC7CEC3273c518651Ace3131B19102ae47fdf5C'; // QuantumAccountFactory
-export const VERIFIER_ADDRESS = '0xFcB4e72630bFA360cdC1f538580699D74152B5Ab'; // Groth16Verifier
-export const REGISTRY_ADDRESS = '0xF9Ba25A15929064F2c6eE2640006b18E93924f23'; // QuantumRegistry
+import { CONFIG } from './config';
+
+export const ENTRYPOINT_ADDRESS = CONFIG.ENTRYPOINT_ADDRESS; // v0.7 EntryPoint
+export const FACTORY_ADDRESS = CONFIG.QUANTUM_ACCOUNT_FACTORY_ADDRESS; // QuantumAccountFactory
+export const VERIFIER_ADDRESS = CONFIG.GROTH16_VERIFIER_ADDRESS;
+export const REGISTRY_ADDRESS = CONFIG.QUANTUM_REGISTRY_ADDRESS; // QuantumRegistry
 
 // Default ABI coder instance
 const abiCoder = AbiCoder.defaultAbiCoder();
@@ -156,16 +158,19 @@ export function packGasFees(
 }
 
 /**
- * Get nonce from EntryPoint
+ * Get nonce from EntryPoint (v0.7)
+ * Uses getNonce(address,uint192) selector: 0x35567e1a
  */
 export async function getAccountNonce(
   accountAddress: string,
   provider: Provider,
   blockTag: string = 'latest'
 ): Promise<bigint> {
+  // v0.7 EntryPoint uses getNonce(address sender, uint192 key)
+  // Function selector: 0x35567e1a
   const nonceCallData =
-    '0x7ecebe00' +
-    accountAddress.slice(2).padStart(64, '0') +
+    '0x35567e1a' +
+    accountAddress.slice(2).toLowerCase().padStart(64, '0') +
     '0'.padStart(64, '0'); // key = 0
 
   try {
@@ -173,7 +178,9 @@ export async function getAccountNonce(
       to: ENTRYPOINT_ADDRESS,
       data: nonceCallData,
     }, blockTag);
-    return BigInt(result);
+    const nonce = BigInt(result);
+    console.log(`[YELLOW-SDK] Fetched nonce (${blockTag}):`, nonce.toString());
+    return nonce;
   } catch (error) {
     if (blockTag === 'pending') {
       // Fallback to latest if pending fails
@@ -184,9 +191,11 @@ export async function getAccountNonce(
         }, 'latest');
         return BigInt(result);
       } catch (e) {
+        console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0');
         return 0n;
       }
     }
+    console.warn('[YELLOW-SDK] Failed to fetch nonce, defaulting to 0');
     return 0n;
   }
 }
@@ -551,9 +560,12 @@ export async function constructUserOp(params: {
 
   // Explicit v0.7 gas limits
   const gasFees = packGasFees(maxPriorityFeePerGas, maxFeePerGas);
-  const verificationGasLimit = 1_000_000n;
-  const callGasLimit = 1_000_000n;
-  const preVerificationGas = 200_000n; // Increased from 100k - bundler requires ~122k+
+
+  // Pool creation takes ~1.6M gas alone. Batching adds more.
+  // Setting high limits (5M) for safety during hackathon/dev.
+  const verificationGasLimit = 5_000_000n;
+  const callGasLimit = 5_000_000n;
+  const preVerificationGas = 500_000n; // Increased to be safe
 
   const accountGasLimits = packAccountGasLimits(
     verificationGasLimit,

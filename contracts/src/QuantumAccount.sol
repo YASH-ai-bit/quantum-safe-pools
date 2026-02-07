@@ -24,8 +24,7 @@ contract QuantumAccount is IAccount {
     // Hash of the Dilithium public key (32 bytes instead of storing full 1,952 bytes)
     bytes32 public publicKeyHash;
     
-    // Nonce for replay protection (though EntryPoint handles this too)
-    uint256 public nonce;
+    // Nonce handling is delegated to the EntryPoint contract (Account abstraction standard)
     
     // Events
     event QuantumAccountInitialized(IEntryPoint indexed entryPoint, bytes32 indexed publicKeyHash);
@@ -171,7 +170,7 @@ contract QuantumAccount is IAccount {
      * @param data Calldata
      */
     function _call(address target, uint256 value, bytes memory data) internal {
-        (bool success, bytes memory result) = target.call{value: value}(data);
+        (bool success, bytes memory result) = target.call{value: value, gas: gasleft()}(data);
         if (!success) {
             // Bubble up the revert reason
             assembly {

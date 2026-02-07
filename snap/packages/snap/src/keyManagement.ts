@@ -1,5 +1,5 @@
 import { dilithium } from 'dilithium-crystals';
-import { keccak256 } from 'ethers';
+import { keccak256, getBytes, hexlify } from 'ethers';
 
 /**
  * Snap state interface
@@ -9,10 +9,31 @@ export type SnapState = {
   dilithiumPrivateKey?: number[]; // Encrypted by MetaMask
   accountSalt?: number;
   publicKeyHash?: string;
+  isRegistered?: boolean; // Track if account is registered in QuantumRegistry
 };
 
 /**
- * Generate a Dilithium keypair from snap's deterministic entropy
+ * Get deterministic entropy from snap (derived from user's seed phrase)
+ * This ensures the same key is ALWAYS derived, even after snap reinstall
+ */
+async function getDeterministicEntropy(): Promise<Uint8Array> {
+  // snap_getEntropy derives a unique, deterministic value from the user's seed phrase
+  // The salt ensures this entropy is unique to our snap's purpose
+  const entropyHex = await snap.request({
+    method: 'snap_getEntropy',
+    params: {
+      version: 1,
+      salt: 'quantumpools-dilithium3-v1-deterministic-key',
+    },
+  }) as string;
+
+  // Convert hex to bytes (32 bytes of entropy)
+  return getBytes(entropyHex);
+}
+
+/**
+ * Generate a Dilithium keypair DETERMINISTICALLY from snap's entropy
+ * This ensures the same keypair is ALWAYS generated from the same seed phrase
  *
  * @returns Promise resolving to generated keypair
  */
@@ -20,8 +41,16 @@ export async function generateDilithiumKeypair(): Promise<{
   publicKey: Uint8Array;
   privateKey: Uint8Array;
 }> {
-  // Generate Dilithium3 keypair (library is async)
-  const keyPair = await dilithium.keyPair();
+  // Get deterministic entropy from user's seed phrase
+  const entropy = await getDeterministicEntropy();
+
+  console.log('[QUANTUM] Generating deterministic Dilithium keypair from seed entropy...');
+
+  // Use the entropy as a seed for Dilithium key generation
+  // dilithium.keyPair() accepts an optional seed parameter
+  // If no seed is provided, it uses random bytes internally
+  // We provide our deterministic entropy as the seed
+  const keyPair = await dilithium.keyPair(entropy);
 
   // Validate keypair was generated
   if (!keyPair?.publicKey || !keyPair.privateKey) {
@@ -38,6 +67,9 @@ export async function generateDilithiumKeypair(): Promise<{
     keyPair.privateKey instanceof Uint8Array
       ? keyPair.privateKey
       : new Uint8Array(keyPair.privateKey);
+
+  console.log('[QUANTUM] Deterministic keypair generated successfully');
+  console.log('[QUANTUM] Public key hash:', keccak256(publicKey));
 
   return {
     publicKey,
