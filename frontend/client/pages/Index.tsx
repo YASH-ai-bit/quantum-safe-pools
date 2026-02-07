@@ -91,7 +91,7 @@ export default function Index() {
                         <span className="text-xs font-mono text-primary break-all">
                           {accountAddress.slice(0, 10)}...{accountAddress.slice(-8)}
                         </span>
-                        <button 
+                        <button
                           onClick={() => {
                             navigator.clipboard.writeText(accountAddress);
                             alert('Address copied! Send funds here to use pools.');
@@ -251,7 +251,7 @@ export default function Index() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t-2 border-primary">
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t-2 border-primary">
                       <div className="pixel-text">
                         <p className="text-foreground/60 text-sm mb-1">tvl</p>
                         <p className="font-bold text-lg text-foreground">${pool.tvl || '0.00'}</p>
@@ -259,10 +259,6 @@ export default function Index() {
                       <div className="pixel-text">
                         <p className="text-foreground/60 text-sm mb-1">apy</p>
                         <p className="font-bold text-lg text-primary">{pool.apy || '0.00'}%</p>
-                      </div>
-                      <div className="pixel-text">
-                        <p className="text-foreground/60 text-sm mb-1">users</p>
-                        <p className="font-bold text-lg text-foreground">0</p>
                       </div>
                     </div>
                   </div>
@@ -305,10 +301,10 @@ export default function Index() {
                 <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-2" />
               ) : (
                 <p className="text-4xl lg:text-5xl font-bold pixel-text text-primary mb-2 glitch-text-hover">
-                  {stats.activeUsers || '0'}
+                  {stats.avgAPY || '5%'}
                 </p>
               )}
-              <p className="text-foreground/70 pixel-text">active_users</p>
+              <p className="text-foreground/70 pixel-text">avg_apy</p>
             </div>
             <div className="text-center secondary-border p-8 glitch-hover">
               {statsLoading ? (

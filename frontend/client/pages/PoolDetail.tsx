@@ -16,8 +16,10 @@ import { usePools } from "@/hooks/usePools";
 import { usePoolOperations } from "@/hooks/usePoolOperations";
 import { useWalletData } from "@/hooks/useWalletData";
 import { useSnap } from "@/hooks/useSnap";
-import { parseUnits, formatEther } from "viem";
+import { useTransactionHistory, TransactionType } from "@/hooks/useTransactionHistory";
+import { parseUnits, formatUnits, formatEther } from "viem";
 import { CONTRACTS } from "@shared/contracts";
+import TransactionSuccessModal from "@/components/TransactionSuccessModal";
 
 // Token decimals mapping (common tokens)
 const TOKEN_DECIMALS: Record<string, number> = {
@@ -46,8 +48,9 @@ export default function PoolDetail() {
     approveToken, // Added approveToken
     loading: opsLoading,
   } = usePoolOperations();
-  const { refetch: refetchWallet, tokenBalances } = useWalletData();
+  const { refetch: refetchWallet, tokenBalances, lpPositions } = useWalletData();
   const { isConnected, accountAddress } = useSnap();
+  const { addTransaction } = useTransactionHistory();
 
   // Find the pool from the pools array
   const pool = pools.find((p) => p.id === poolId);
@@ -60,6 +63,16 @@ export default function PoolDetail() {
   const [swapAmountIn, setSwapAmountIn] = useState("");
   const [swapTokenIn, setSwapTokenIn] = useState<"token0" | "token1">("token0");
   const [error, setError] = useState<string | null>(null);
+
+  // Success modal state
+  const [successModal, setSuccessModal] = useState<{
+    isOpen: boolean;
+    type: TransactionType;
+    txHash: string;
+    details: any;
+  }>({ isOpen: false, type: "swap", txHash: "", details: {} });
+
+  const closeSuccessModal = () => setSuccessModal((prev) => ({ ...prev, isOpen: false }));
 
   // Helper to get token balance from wallet data
   const getTokenBalance = (symbol: string): number => {
@@ -107,6 +120,95 @@ export default function PoolDetail() {
 
     return { isValid: errors.length === 0, errors };
   }, [pool, swapAmountIn, swapTokenIn, tokenBalances]);
+
+  // Get user's LP balance for this pool
+  const userLpPosition = useMemo(() => {
+    if (!pool || !lpPositions) return null;
+    return lpPositions.find((lp) => lp.poolId.toLowerCase() === pool.id.toLowerCase());
+  }, [pool, lpPositions]);
+
+  const userLpBalance = useMemo(() => {
+    if (!userLpPosition) return 0n;
+    return userLpPosition.balance;
+  }, [userLpPosition]);
+
+  const userLpBalanceFormatted = useMemo(() => {
+    return formatUnits(userLpBalance, 18);
+  }, [userLpBalance]);
+
+  const userPoolShare = useMemo(() => {
+    if (!pool || !userLpPosition || pool.liquidity === 0n) return 0;
+    return (Number(userLpBalance) / Number(pool.liquidity)) * 100;
+  }, [pool, userLpPosition, userLpBalance]);
+
+  // Calculate expected swap output using constant product formula
+  // amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
+  // The 0.3% fee is applied (997/1000)
+  const swapOutputEstimate = useMemo(() => {
+    if (!pool || !swapAmountIn || parseFloat(swapAmountIn) <= 0) {
+      return { amountOut: 0, exchangeRate: 0, priceImpact: 0 };
+    }
+
+    const zeroForOne = swapTokenIn === "token0";
+    const decimalsIn = getTokenDecimals(zeroForOne ? pool.token0Symbol : pool.token1Symbol);
+    const decimalsOut = getTokenDecimals(zeroForOne ? pool.token1Symbol : pool.token0Symbol);
+
+    const reserveIn = zeroForOne ? pool.reserve0 : pool.reserve1;
+    const reserveOut = zeroForOne ? pool.reserve1 : pool.reserve0;
+
+    if (reserveIn === 0n || reserveOut === 0n) {
+      return { amountOut: 0, exchangeRate: 0, priceImpact: 0 };
+    }
+
+    // Parse input amount to wei
+    const amountInWei = parseUnits(swapAmountIn, decimalsIn);
+
+    // Calculate output with 0.3% fee: amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
+    const numerator = amountInWei * 997n * reserveOut;
+    const denominator = reserveIn * 1000n + amountInWei * 997n;
+    const amountOutWei = numerator / denominator;
+
+    // Format output
+    const amountOut = parseFloat(formatUnits(amountOutWei, decimalsOut));
+
+    // Calculate exchange rate (price of 1 input token in output tokens)
+    const reserveInNum = parseFloat(formatUnits(reserveIn, decimalsIn));
+    const reserveOutNum = parseFloat(formatUnits(reserveOut, decimalsOut));
+    const exchangeRate = reserveInNum > 0 ? reserveOutNum / reserveInNum : 0;
+
+    // Calculate price impact
+    const inputAmount = parseFloat(swapAmountIn);
+    const idealOutput = inputAmount * exchangeRate;
+    const priceImpact = idealOutput > 0 ? ((idealOutput - amountOut) / idealOutput) * 100 : 0;
+
+    return { amountOut, exchangeRate, priceImpact };
+  }, [pool, swapAmountIn, swapTokenIn]);
+
+  // Calculate estimated tokens to receive when removing liquidity
+  const removeEstimate = useMemo(() => {
+    if (!pool || !removeAmount || parseFloat(removeAmount) <= 0) {
+      return { token0: 0, token1: 0 };
+    }
+
+    const lpAmountWei = parseUnits(removeAmount, 18);
+    const totalSupply = pool.liquidity;
+
+    if (totalSupply === 0n) {
+      return { token0: 0, token1: 0 };
+    }
+
+    const decimals0 = getTokenDecimals(pool.token0Symbol);
+    const decimals1 = getTokenDecimals(pool.token1Symbol);
+
+    // user's share of each reserve: (lpAmount / totalSupply) * reserve
+    const token0Wei = (lpAmountWei * pool.reserve0) / totalSupply;
+    const token1Wei = (lpAmountWei * pool.reserve1) / totalSupply;
+
+    return {
+      token0: parseFloat(formatUnits(token0Wei, decimals0)),
+      token1: parseFloat(formatUnits(token1Wei, decimals1)),
+    };
+  }, [pool, removeAmount]);
 
   const handleSuccess = (result: any) => {
     setError(null);
@@ -168,7 +270,7 @@ export default function PoolDetail() {
     setError(null);
 
     try {
-      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_LIQUIDITY_ENGINE; // QuantumLiquidityEngine
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_AMM_ROUTER; // QuantumAMMRouter
 
       // Get token decimals
       const decimals0 = getTokenDecimals(pool.token0Symbol);
@@ -200,17 +302,8 @@ export default function PoolDetail() {
         await approveToken(pool.poolKey.currency1, ROUTER_ADDRESS, amount1Wei);
       }
 
-      // 2. Add Liquidity
-      // Calculate tick range (simplified - full range)
-      const tickLower = -887220;
-      const tickUpper = 887220;
-
-      // For liquidity delta, we use the ETH amount (token0) since it's 18 decimals
-      // Uniswap V4 liquidity is based on sqrt(amount0 * amount1)
-      // For simplicity, use the 18-decimal amount as a proxy
-      const liquidityDelta = decimals0 === 18 ? amount0Wei : amount1Wei;
-
-      // Calculate ETH Value
+      // 2. Add Liquidity via QuantumAMMRouter
+      // Calculate ETH Value for native token
       let ethValue = "0";
       if (
         pool.poolKey.currency0 === "0x0000000000000000000000000000000000000000"
@@ -222,19 +315,41 @@ export default function PoolDetail() {
         ethValue = amount1Wei.toString();
 
       const result = await addLiquidity(
-        pool.poolKey,
-        tickLower,
-        tickUpper,
-        liquidityDelta,
+        pool.poolKey.currency0,  // tokenA address
+        pool.poolKey.currency1,  // tokenB address
+        amount0Wei,              // amountA
+        amount1Wei,              // amountB
+        0n,                      // amountAMin (0 for initial liquidity)
+        0n,                      // amountBMin (0 for initial liquidity)
         ethValue,
       );
 
       handleSuccess(result);
-      alert("Liquidity added successfully!");
+
+      // Track transaction and show success modal
+      const txHash = result?.transactionHash || "";
+      addTransaction("add_liquidity", txHash, {
+        fromToken: pool.token0Symbol,
+        toToken: pool.token1Symbol,
+        fromAmount: addAmount0,
+        toAmount: addAmount1,
+        poolId: pool.id,
+      });
+      setSuccessModal({
+        isOpen: true,
+        type: "add_liquidity",
+        txHash,
+        details: {
+          fromToken: pool.token0Symbol,
+          toToken: pool.token1Symbol,
+          fromAmount: addAmount0,
+          toAmount: addAmount1,
+        },
+      });
       setAddAmount0("");
       setAddAmount1("");
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setError(`Error: ${err.message}`);
     }
   };
 
@@ -246,23 +361,44 @@ export default function PoolDetail() {
     }
 
     try {
-      const tickLower = -887220;
-      const tickUpper = 887220;
-      // For remove liquidity, use 18 decimals (liquidity is in 18 decimal units)
-      const liquidityDelta = parseUnits(removeAmount || "0", 18); // Helper handles negation
+      // For remove liquidity, use 18 decimals (LP tokens are in 18 decimal units)
+      const liquidityAmount = parseUnits(removeAmount || "0", 18);
 
       const result = await removeLiquidity(
-        pool.poolKey,
-        tickLower,
-        tickUpper,
-        liquidityDelta,
+        pool.poolKey.currency0,  // tokenA address
+        pool.poolKey.currency1,  // tokenB address
+        liquidityAmount,         // liquidity amount to remove
+        0n,                      // amountAMin (0 for simplicity)
+        0n,                      // amountBMin (0 for simplicity)
       );
 
       handleSuccess(result);
-      alert("Liquidity removed successfully!");
+
+      // Track transaction and show success modal
+      const txHash = result?.transactionHash || "";
+      addTransaction("remove_liquidity", txHash, {
+        fromToken: pool.token0Symbol,
+        toToken: pool.token1Symbol,
+        lpAmount: removeAmount,
+        fromAmount: removeEstimate.token0.toFixed(6),
+        toAmount: removeEstimate.token1.toFixed(6),
+        poolId: pool.id,
+      });
+      setSuccessModal({
+        isOpen: true,
+        type: "remove_liquidity",
+        txHash,
+        details: {
+          fromToken: pool.token0Symbol,
+          toToken: pool.token1Symbol,
+          fromAmount: removeEstimate.token0.toFixed(6),
+          toAmount: removeEstimate.token1.toFixed(6),
+          lpAmount: removeAmount,
+        },
+      });
       setRemoveAmount("");
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setError(`Error: ${err.message}`);
     }
   };
 
@@ -281,7 +417,7 @@ export default function PoolDetail() {
     setError(null);
 
     try {
-      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_LIQUIDITY_ENGINE; // QuantumLiquidityEngine
+      const ROUTER_ADDRESS = CONTRACTS.QUANTUM_AMM_ROUTER; // QuantumAMMRouter
 
       const zeroForOne = swapTokenIn === "token0";
 
@@ -315,19 +451,45 @@ export default function PoolDetail() {
         ethValue = amountSpecified.toString();
       }
 
+      // Get token out address
+      const tokenOut = zeroForOne
+        ? pool.poolKey.currency1
+        : pool.poolKey.currency0;
+
       const result = await swap(
-        pool.poolKey,
-        zeroForOne,
-        amountSpecified,
-        sqrtPriceLimitX96,
+        tokenIn,        // tokenIn address
+        tokenOut,       // tokenOut address
+        amountSpecified, // amountIn
+        0n,             // amountOutMin (0 for simplicity, should use quote in production)
         ethValue,
       );
 
       handleSuccess(result);
-      alert("Swap executed successfully!");
+
+      // Track transaction and show success modal
+      const txHash = result?.transactionHash || "";
+      const tokenOutSymbol = zeroForOne ? pool.token1Symbol : pool.token0Symbol;
+      addTransaction("swap", txHash, {
+        fromToken: tokenInSymbol,
+        toToken: tokenOutSymbol,
+        fromAmount: swapAmountIn,
+        toAmount: swapOutputEstimate.amountOut.toFixed(6),
+        poolId: pool.id,
+      });
+      setSuccessModal({
+        isOpen: true,
+        type: "swap",
+        txHash,
+        details: {
+          fromToken: tokenInSymbol,
+          toToken: tokenOutSymbol,
+          fromAmount: swapAmountIn,
+          toAmount: swapOutputEstimate.amountOut.toFixed(6),
+        },
+      });
       setSwapAmountIn("");
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setError(`Error: ${err.message}`);
     }
   };
 
@@ -373,18 +535,6 @@ export default function PoolDetail() {
                 </p>
               </div>
               <div>
-                <p className="text-foreground/60 text-sm mb-1">24H_VOLUME</p>
-                <p className="text-foreground font-bold text-xl">
-                  ${pool.volume24h || "0.00"}
-                </p>
-              </div>
-              <div>
-                <p className="text-foreground/60 text-sm mb-1">24H_FEES</p>
-                <p className="text-primary font-bold text-xl">
-                  ${pool.fees24h || "0.00"}
-                </p>
-              </div>
-              <div>
                 <p className="text-foreground/60 text-sm mb-1">APY</p>
                 <p className="text-primary font-bold text-xl">
                   {pool.apy || "0.00"}%
@@ -420,35 +570,77 @@ export default function PoolDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="p-4 border border-primary/50">
                     <p className="text-foreground/60 text-sm mb-2">
-                      CURRENT_PRICE
+                      EXCHANGE_RATE
                     </p>
-                    <p className="text-foreground font-bold text-xl">1.0</p>
-                    <p className="text-primary text-sm mt-1">+0.5% (24h)</p>
-                  </div>
-                  <div className="p-4 border border-primary/50">
-                    <p className="text-foreground/60 text-sm mb-2">LIQUIDITY</p>
                     <p className="text-foreground font-bold text-xl">
-                      {formatEther(pool.liquidity)}
+                      1 {pool.token0Symbol} = {pool.reserve0 > 0n
+                        ? (parseFloat(formatUnits(pool.reserve1, getTokenDecimals(pool.token1Symbol))) /
+                          parseFloat(formatUnits(pool.reserve0, getTokenDecimals(pool.token0Symbol)))).toFixed(6)
+                        : "0"} {pool.token1Symbol}
+                    </p>
+                  </div>
+                  <div className="p-4 border border-primary/50">
+                    <p className="text-foreground/60 text-sm mb-2">TOTAL_LP_SUPPLY</p>
+                    <p className="text-foreground font-bold text-xl">
+                      {parseFloat(formatEther(pool.liquidity)).toFixed(4)} LP
                     </p>
                   </div>
                   <div className="p-4 border border-primary/50">
                     <p className="text-foreground/60 text-sm mb-2">
-                      TOTAL_FEES_COLLECTED
+                      {pool.token0Symbol}_RESERVE
                     </p>
-                    <p className="text-primary font-bold text-xl">
-                      ${pool.fees24h || "0.00"}
+                    <p className="text-foreground font-bold text-xl">
+                      {parseFloat(formatUnits(pool.reserve0, getTokenDecimals(pool.token0Symbol))).toFixed(4)}
                     </p>
                   </div>
                   <div className="p-4 border border-primary/50">
                     <p className="text-foreground/60 text-sm mb-2">
-                      IMPERMANENT_LOSS
+                      {pool.token1Symbol}_RESERVE
                     </p>
-                    <p className="text-foreground font-bold text-xl">0.00%</p>
-                    <p className="text-foreground/60 text-xs mt-1">
-                      Current vs Initial
+                    <p className="text-foreground font-bold text-xl">
+                      {parseFloat(formatUnits(pool.reserve1, getTokenDecimals(pool.token1Symbol))).toFixed(4)}
                     </p>
                   </div>
                 </div>
+
+                {/* User's LP Position */}
+                {userLpBalance > 0n && (
+                  <div className="mt-6 p-6 border-2 border-primary bg-primary/5">
+                    <h3 className="text-xl font-bold text-primary mb-4">YOUR_POSITION</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">LP_TOKENS</p>
+                        <p className="text-foreground font-bold text-lg">
+                          {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">POOL_SHARE</p>
+                        <p className="text-primary font-bold text-lg">
+                          {userPoolShare.toFixed(4)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-foreground/60 text-sm mb-1">POSITION_VALUE</p>
+                        <p className="text-foreground font-bold text-lg">
+                          ${userLpPosition?.value || "0.00"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {userLpBalance === 0n && isConnected && (
+                  <div className="mt-6 p-4 border border-foreground/20 bg-foreground/5 text-center">
+                    <p className="text-foreground/60">You don't have any LP tokens in this pool yet.</p>
+                    <button
+                      onClick={() => setActiveTab("add")}
+                      className="mt-2 text-primary hover:underline"
+                    >
+                      Add Liquidity →
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -548,34 +740,103 @@ export default function PoolDetail() {
                 <h2 className="text-2xl font-bold text-foreground mb-4">
                   REMOVE_LIQUIDITY
                 </h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-foreground">
-                      LP_TOKEN_AMOUNT
-                    </label>
-                    <input
-                      type="number"
-                      value={removeAmount}
-                      onChange={(e) => setRemoveAmount(e.target.value)}
-                      className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
-                      placeholder="0.0"
-                    />
+
+                {/* LP Balance Info */}
+                <div className="p-4 border border-primary/50 bg-primary/5">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-foreground/60 text-sm">YOUR_LP_BALANCE</p>
+                      <p className="text-foreground font-bold text-xl">
+                        {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-foreground/60 text-sm">POOL_SHARE</p>
+                      <p className="text-primary font-bold text-xl">
+                        {userPoolShare.toFixed(4)}%
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleRemoveLiquidity}
-                    disabled={opsLoading || !isConnected}
-                    className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50"
-                  >
-                    {opsLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-                        REMOVING...
-                      </>
-                    ) : (
-                      "REMOVE_LIQUIDITY"
-                    )}
-                  </button>
                 </div>
+
+                {userLpBalance === 0n && (
+                  <div className="p-4 border-2 border-yellow-500/50 bg-yellow-500/10 text-center">
+                    <p className="text-yellow-500">You don't have any LP tokens to remove.</p>
+                    <button
+                      onClick={() => setActiveTab("add")}
+                      className="mt-2 text-primary hover:underline"
+                    >
+                      Add Liquidity First →
+                    </button>
+                  </div>
+                )}
+
+                {userLpBalance > 0n && (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-semibold text-foreground">
+                          LP_AMOUNT_TO_REMOVE
+                        </label>
+                        <button
+                          onClick={() => setRemoveAmount(userLpBalanceFormatted)}
+                          className="text-xs text-primary hover:text-primary/80 border border-primary px-2 py-1"
+                        >
+                          MAX
+                        </button>
+                      </div>
+                      <input
+                        type="number"
+                        value={removeAmount}
+                        onChange={(e) => setRemoveAmount(e.target.value)}
+                        className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
+                        placeholder="0.0"
+                        max={userLpBalanceFormatted}
+                      />
+                      <p className="text-xs text-foreground/50 mt-1">
+                        Available: {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                      </p>
+                    </div>
+
+                    {/* Estimated Tokens to Receive */}
+                    {parseFloat(removeAmount) > 0 && (
+                      <div className="p-4 border border-foreground/30 bg-black/50">
+                        <p className="text-foreground/60 text-sm mb-3">YOU_WILL_RECEIVE</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-3 border border-primary/30 bg-primary/5">
+                            <p className="text-foreground/60 text-xs">{pool.token0Symbol}</p>
+                            <p className="text-foreground font-bold text-lg">
+                              {removeEstimate.token0.toFixed(6)}
+                            </p>
+                          </div>
+                          <div className="p-3 border border-primary/30 bg-primary/5">
+                            <p className="text-foreground/60 text-xs">{pool.token1Symbol}</p>
+                            <p className="text-foreground font-bold text-lg">
+                              {removeEstimate.token1.toFixed(6)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleRemoveLiquidity}
+                      disabled={opsLoading || !isConnected || parseFloat(removeAmount) <= 0 || parseFloat(removeAmount) > parseFloat(userLpBalanceFormatted)}
+                      className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50"
+                    >
+                      {opsLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                          REMOVING...
+                        </>
+                      ) : parseFloat(removeAmount) > parseFloat(userLpBalanceFormatted) ? (
+                        "INSUFFICIENT_LP_BALANCE"
+                      ) : (
+                        "REMOVE_LIQUIDITY"
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -617,53 +878,111 @@ export default function PoolDetail() {
                 )}
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-foreground">
-                      TOKEN_IN
-                    </label>
-                    <select
-                      value={swapTokenIn}
-                      onChange={(e) =>
-                        setSwapTokenIn(e.target.value as "token0" | "token1")
-                      }
-                      className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
-                    >
-                      <option value="token0">{pool.token0Symbol || "Token 0"}</option>
-                      <option value="token1">{pool.token1Symbol || "Token 1"}</option>
-                    </select>
+                  {/* FROM Token */}
+                  <div className="p-4 border-2 border-primary/50 bg-black/50">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-semibold text-foreground/60">FROM</label>
+                      <p className="text-xs text-foreground/50">
+                        Balance: {getTokenBalance(swapTokenIn === "token0" ? (pool.token0Symbol || "") : (pool.token1Symbol || "")).toFixed(4)}
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <select
+                        value={swapTokenIn}
+                        onChange={(e) => setSwapTokenIn(e.target.value as "token0" | "token1")}
+                        className="w-32 px-3 py-3 bg-primary/10 text-foreground border-2 border-primary pixel-text font-bold"
+                      >
+                        <option value="token0">{pool.token0Symbol || "Token 0"}</option>
+                        <option value="token1">{pool.token1Symbol || "Token 1"}</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={swapAmountIn}
+                        onChange={(e) => setSwapAmountIn(e.target.value)}
+                        className="flex-1 px-4 py-3 bg-black text-foreground text-right text-xl border-2 border-primary pixel-text"
+                        placeholder="0.0"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-foreground">
-                      AMOUNT_IN
-                    </label>
-                    <input
-                      type="number"
-                      value={swapAmountIn}
-                      onChange={(e) => setSwapAmountIn(e.target.value)}
-                      className="w-full px-4 py-3 bg-black text-foreground border-2 border-primary pixel-text"
-                      placeholder="0.0"
-                    />
-                    <p className="text-xs text-foreground/50 mt-1">
-                      Balance: {getTokenBalance(swapTokenIn === "token0" ? (pool.token0Symbol || "") : (pool.token1Symbol || "")).toFixed(4)} {swapTokenIn === "token0" ? pool.token0Symbol : pool.token1Symbol}
-                    </p>
+
+                  {/* Swap Direction Arrow */}
+                  <div className="flex justify-center">
+                    <div className="p-2 border-2 border-primary bg-black">
+                      <ArrowRight className="w-6 h-6 text-primary rotate-90" />
+                    </div>
                   </div>
+
+                  {/* TO Token (Output) */}
+                  <div className="p-4 border-2 border-primary/50 bg-primary/5">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-semibold text-foreground/60">TO (ESTIMATED)</label>
+                      <p className="text-xs text-foreground/50">
+                        Balance: {getTokenBalance(swapTokenIn === "token0" ? (pool.token1Symbol || "") : (pool.token0Symbol || "")).toFixed(4)}
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-32 px-3 py-3 bg-primary/20 text-foreground border-2 border-primary pixel-text font-bold flex items-center">
+                        {swapTokenIn === "token0" ? pool.token1Symbol : pool.token0Symbol}
+                      </div>
+                      <div className="flex-1 px-4 py-3 bg-black/50 text-foreground text-right text-xl border-2 border-primary/50 pixel-text">
+                        {swapOutputEstimate.amountOut > 0
+                          ? swapOutputEstimate.amountOut.toFixed(6)
+                          : "0.0"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Exchange Rate & Price Impact */}
+                  {parseFloat(swapAmountIn) > 0 && (
+                    <div className="p-4 border border-foreground/20 bg-black/30 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-foreground/60">EXCHANGE_RATE</span>
+                        <span className="text-foreground">
+                          1 {swapTokenIn === "token0" ? pool.token0Symbol : pool.token1Symbol} = {swapOutputEstimate.exchangeRate.toFixed(6)} {swapTokenIn === "token0" ? pool.token1Symbol : pool.token0Symbol}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-foreground/60">PRICE_IMPACT</span>
+                        <span className={swapOutputEstimate.priceImpact > 5 ? "text-red-500" : swapOutputEstimate.priceImpact > 1 ? "text-yellow-500" : "text-green-500"}>
+                          {swapOutputEstimate.priceImpact.toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-foreground/60">FEE</span>
+                        <span className="text-foreground/80">0.3%</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* High Price Impact Warning */}
+                  {swapOutputEstimate.priceImpact > 5 && (
+                    <div className="p-3 border-2 border-red-500/50 bg-red-500/10">
+                      <div className="flex items-center gap-2 text-red-500">
+                        <AlertCircle className="w-4 h-4" />
+                        <p className="text-sm">High price impact! Consider trading a smaller amount.</p>
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={handleSwap}
-                    disabled={opsLoading || !isConnected || !swapValidation.isValid}
-                    className="w-full py-3 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50"
+                    disabled={opsLoading || !isConnected || !swapValidation.isValid || parseFloat(swapAmountIn) <= 0}
+                    className="w-full py-4 border-2 border-primary text-primary hover:bg-primary hover:text-black font-bold transition-all pixel-text disabled:opacity-50 text-lg"
                   >
                     {opsLoading ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                        <Loader2 className="w-5 h-5 animate-spin inline mr-2" />
                         SWAPPING...
                       </>
                     ) : !swapValidation.isValid ? (
                       <>
-                        <Wallet className="w-4 h-4 inline mr-2" />
+                        <Wallet className="w-5 h-5 inline mr-2" />
                         INSUFFICIENT_BALANCE
                       </>
+                    ) : parseFloat(swapAmountIn) <= 0 ? (
+                      "ENTER_AMOUNT"
                     ) : (
-                      "EXECUTE_SWAP"
+                      `SWAP ${swapTokenIn === "token0" ? pool.token0Symbol : pool.token1Symbol} → ${swapTokenIn === "token0" ? pool.token1Symbol : pool.token0Symbol}`
                     )}
                   </button>
                 </div>
@@ -674,6 +993,15 @@ export default function PoolDetail() {
       </main>
 
       <Footer />
+
+      {/* Success Modal */}
+      <TransactionSuccessModal
+        isOpen={successModal.isOpen}
+        onClose={closeSuccessModal}
+        type={successModal.type}
+        txHash={successModal.txHash}
+        details={successModal.details}
+      />
     </div>
   );
 }

@@ -154,22 +154,28 @@ export function useWalletData() {
   useEffect(() => {
     const fetchLP = async () => {
       if (!address || !publicClient || pools.length === 0) {
+        console.log("[LP Fetch] Skipping - missing dependencies:", { address: !!address, publicClient: !!publicClient, poolsLength: pools.length });
         setLpPositions([]);
         setPoolsJoined(0);
         return;
       }
 
+      console.log("[LP Fetch] Starting LP position fetch for", pools.length, "pools, address:", address);
       const positions: LPPosition[] = [];
       let joinedCount = 0;
 
       for (const pool of pools) {
         try {
+          console.log("[LP Fetch] Querying pool:", pool.id, "for address:", address);
+
           const balance = await publicClient.readContract({
             address: pool.id as `0x${string}`,
             abi: ERC20_ABI,
             functionName: "balanceOf",
             args: [address],
           }) as bigint;
+
+          console.log("[LP Fetch] Pool", pool.id, "balance:", balance.toString());
 
           if (balance > 0n) {
             joinedCount++;
@@ -178,9 +184,11 @@ export function useWalletData() {
             // Share = Balance / TotalSupply
             // Value = Share * TVL
             const totalSupply = pool.liquidity; // In our new Pool interface, liquidity IS totalSupply
-            const share = Number(balance) / Number(totalSupply);
+            const share = totalSupply > 0n ? Number(balance) / Number(totalSupply) : 0;
             const tvlVal = parseFloat(pool.tvl || "0");
             const val = tvlVal * share;
+
+            console.log("[LP Fetch] User has position in pool", pool.id, "- balance:", balance.toString(), "share:", share);
 
             positions.push({
               poolId: pool.id,
@@ -190,10 +198,11 @@ export function useWalletData() {
             });
           }
         } catch (e) {
-          console.error("Error fetching LP balance:", e);
+          console.error("[LP Fetch] Error fetching LP balance for pool", pool.id, ":", e);
         }
       }
 
+      console.log("[LP Fetch] Complete - found", joinedCount, "pools with positions");
       setLpPositions(positions);
       setPoolsJoined(joinedCount);
     };
