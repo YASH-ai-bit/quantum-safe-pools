@@ -992,7 +992,9 @@ export default function PoolDetail() {
                         {swapOutputEstimate.amountOut > 0 ? (
                           swapOutputEstimate.amountOut.toFixed(6)
                         ) : pool.poolType === "dark" && parseFloat(swapAmountIn) > 0 ? (
-                          <span className="text-purple-400 text-sm">Calculated by contract</span>
+                          <span className="text-purple-400 text-sm">
+                            ~{(parseFloat(swapAmountIn) * 0.95).toFixed(4)} - {(parseFloat(swapAmountIn) * 0.997).toFixed(4)}
+                          </span>
                         ) : (
                           "0.0"
                         )}
@@ -1000,7 +1002,7 @@ export default function PoolDetail() {
                     </div>
                     {pool.poolType === "dark" && parseFloat(swapAmountIn) > 0 && swapOutputEstimate.amountOut === 0 && (
                       <p className="text-xs text-purple-400 mt-2">
-                        🔒 Output amount hidden for privacy. The contract will calculate your exact output.
+                        🔒 Estimated range (assuming ~1:1 rate). Exact output calculated by contract.
                       </p>
                     )}
                   </div>
