@@ -11,8 +11,10 @@ import {
   ArrowRight,
   Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePools } from "@/hooks/usePools";
+import { useQuantumRegistry } from "@/hooks/useQuantumRegistry";
+import { useSnap } from "@/hooks/useSnap";
 import { ethers } from "ethers";
 
 function formatAddress(address: string): string {
@@ -23,6 +25,25 @@ function formatAddress(address: string): string {
 export default function Pools() {
   const [searchQuery, setSearchQuery] = useState("");
   const { pools, loading, error } = usePools();
+  const { checkQuantumSafe } = useQuantumRegistry();
+  const { accountAddress } = useSnap();
+  const [isQuantumSafe, setIsQuantumSafe] = useState<boolean>(false);
+
+  // Check QS status when account changes
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (accountAddress) {
+        try {
+          const isQS = await checkQuantumSafe(accountAddress);
+          setIsQuantumSafe(isQS);
+        } catch (error) {
+          console.error("Error checking QS status:", error);
+          setIsQuantumSafe(false);
+        }
+      }
+    };
+    checkStatus();
+  }, [accountAddress, checkQuantumSafe]);
 
   // Calculate aggregate stats (exclude dark pools from numeric aggregates)
   const totalTVL = pools.reduce((sum, pool) => {
@@ -173,12 +194,19 @@ export default function Pools() {
                           )}
                         </div>
                         <div className="group/fee relative">
-                          <p className="text-foreground/60 text-sm cursor-help border-b border-dashed border-foreground/30 inline-block">
-                            {feePercent}% fee
+                          <p className={`text-sm cursor-help border-b border-dashed border-foreground/30 inline-block ${isQuantumSafe ? 'text-primary' : 'text-foreground/60'}`}>
+                            {isQuantumSafe ? '0.10%' : '0.30%'} fee
+                            {isQuantumSafe && <span className="ml-1 text-xs">✨</span>}
                           </p>
-                          {feePercent === "0.30" && (
+                          {!isQuantumSafe && (
                             <div className="absolute left-0 bottom-full mb-2 w-48 p-2 bg-primary text-black text-xs font-bold rounded opacity-0 group-hover/fee:opacity-100 transition-opacity pointer-events-none z-10 text-center shadow-lg border-2 border-primary-foreground">
-                              Standard Tier. Become a QS to unlock lower fees!
+                              Standard Tier. Become a QS to unlock 0.1% fees!
+                              <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-primary"></div>
+                            </div>
+                          )}
+                          {isQuantumSafe && (
+                            <div className="absolute left-0 bottom-full mb-2 w-56 p-2 bg-primary text-black text-xs font-bold rounded opacity-0 group-hover/fee:opacity-100 transition-opacity pointer-events-none z-10 text-center shadow-lg border-2 border-primary-foreground">
+                              🎉 QS Active! You pay 0.1% fees (70% discount)
                               <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-primary"></div>
                             </div>
                           )}

@@ -287,7 +287,7 @@ export function useWalletData() {
           const poolName = `${pool.token0Symbol || 'TOKEN0'}-${pool.token1Symbol || 'TOKEN1'}`;
 
           balances.push({
-            symbol: 'LP',
+            symbol: `${poolName} LP`, // Changed from 'LP' to pool-specific
             name: `${poolName} LP`,
             amount: formatUnits(position.balance, 18),
             value: `$${position.value}`,

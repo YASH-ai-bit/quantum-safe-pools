@@ -6,6 +6,7 @@
 @tailwind utilities;
 
 @layer base {
+
   /**
    * Coder/Hacker Style Theme
    * Black background, white text, neon lime accent
@@ -112,7 +113,12 @@
     font-family: 'JetBrains Mono', 'Courier Prime', monospace;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     text-shadow: 0 0 10px hsl(90 100% 50% / 0.3);
     font-weight: 700;
     letter-spacing: 0.05em;
@@ -159,6 +165,7 @@
 
   .card-hover {
     @apply transition-all duration-300;
+
     &:hover {
       box-shadow: 0 0 20px hsl(90 100% 50% / 0.5), inset 0 0 10px hsl(90 100% 50% / 0.1);
     }
@@ -171,6 +178,7 @@
 
   .glitch-hover {
     @apply transition-all cursor-pointer;
+
     &:hover {
       animation: glitch 0.3s ease-out;
       box-shadow: 0 0 20px hsl(90 100% 50% / 0.6);
@@ -179,6 +187,7 @@
 
   .cypher-hover {
     @apply transition-all cursor-pointer;
+
     &:hover {
       animation: cypher 0.6s ease-out;
     }
@@ -186,6 +195,7 @@
 
   .glitch-text-hover {
     @apply transition-all;
+
     &:hover {
       animation: cypher 0.6s ease-out;
       text-shadow: 0 0 20px hsl(90 100% 50% / 0.8), 0 0 40px hsl(90 100% 50% / 0.4);
