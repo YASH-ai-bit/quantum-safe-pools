@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { RPC_URLS, CHAIN_ID, CONTRACTS } from "@shared/contracts";
+import { RPC_URLS, CHAIN_ID, CONTRACTS, BUNDLER_URLS } from "@shared/contracts";
 import { submitUserOpToBundler, waitForUserOpReceipt } from "../utils/bundler";
 
 const SNAP_ID = "local:http://localhost:8080"; // Update with deployed snap ID
@@ -230,8 +230,8 @@ export function useSnap() {
             request: {
               method: "quantum_getAccountAddress",
               params: {
-                factoryAddress: CONTRACTS?.QUANTUM_SYSTEM || "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
-                rpcUrl: RPC_URLS?.SEPOLIA || "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
+                factoryAddress: CONTRACTS?.QUANTUM_SYSTEM,
+                rpcUrl: RPC_URLS?.SEPOLIA,
               },
             },
           },
@@ -315,10 +315,11 @@ export function useSnap() {
               to,
               value,
               data,
-              factoryAddress: CONTRACTS?.QUANTUM_SYSTEM || "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
-              rpcUrl: RPC_URLS?.SEPOLIA || "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
-              chainId: CHAIN_ID?.SEPOLIA || 11155111,
-              paymasterAddress: CONTRACTS?.HACKATHON_PAYMASTER || "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96",
+              factoryAddress: CONTRACTS?.QUANTUM_SYSTEM,
+              rpcUrl: RPC_URLS?.SEPOLIA,
+              chainId: CHAIN_ID?.SEPOLIA,
+              paymasterAddress: CONTRACTS?.HACKATHON_PAYMASTER,
+              bundlerUrl: BUNDLER_URLS?.SEPOLIA,
             },
           },
         },
@@ -464,10 +465,11 @@ export function useSnap() {
             method: "quantum_batchTransactions",
             params: {
               transactions,
-              factoryAddress: CONTRACTS?.QUANTUM_SYSTEM || "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec",
-              rpcUrl: RPC_URLS?.SEPOLIA || "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
-              chainId: CHAIN_ID?.SEPOLIA || 11155111,
-              paymasterAddress: CONTRACTS?.HACKATHON_PAYMASTER || "0x71877B35abc4D002Ffe6eCc32E7c02FEbBc9FC96",
+              factoryAddress: CONTRACTS?.QUANTUM_SYSTEM,
+              rpcUrl: RPC_URLS?.SEPOLIA,
+              chainId: CHAIN_ID?.SEPOLIA,
+              paymasterAddress: CONTRACTS?.HACKATHON_PAYMASTER,
+              bundlerUrl: BUNDLER_URLS?.SEPOLIA,
             },
           },
         },

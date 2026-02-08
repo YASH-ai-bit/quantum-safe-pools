@@ -1,4 +1,7 @@
-# Private/Personal Files
+# Environment Variables
+.env
+.env.*
+!.env.example
 IDEA.md
 
 # OS Files

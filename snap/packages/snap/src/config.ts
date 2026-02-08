@@ -7,18 +7,18 @@
 export const CONFIG = {
   // Sepolia (Refactored Architecture v2.0.0)
   CHAIN_ID: 11155111,
-  RPC_URL: "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5",
+  RPC_URL: "https://rpc.sepolia.org",
 
   // Addresses (lowercase to avoid checksum issues)
-  QUANTUM_REGISTRY_ADDRESS: "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec".toLowerCase(), // QuantumSystem
-  QUANTUM_ACCOUNT_FACTORY_ADDRESS: "0x2335B55cC5EdffF0fA78E2A749C1B2a66Ff8b4ec".toLowerCase(), // QuantumSystem
-  GROTH16_VERIFIER_ADDRESS: "0x38078D4755172A9047B190CCE2eC614D242ACb77".toLowerCase(),
+  QUANTUM_REGISTRY_ADDRESS: "0x48fF10ed0F6cE42092756AA314C1616a04a49239".toLowerCase(), // QuantumSystem
+  QUANTUM_ACCOUNT_FACTORY_ADDRESS: "0x48fF10ed0F6cE42092756AA314C1616a04a49239".toLowerCase(), // QuantumSystem
+  GROTH16_VERIFIER_ADDRESS: "0x51c42280f8A9EC87BfFf3091Ff1C28C43171E1bc".toLowerCase(),
   HACKATHON_PAYMASTER_ADDRESS: "0x71877b35abc4d002ffe6ecc32e7c02febbc9fc96", // Unchanged
-  QUANTUM_AMM_ROUTER: "0xA9ebc6aEfe13D9e93BcBA94aFE54E513bB730722".toLowerCase(), // QuantumAMMRouter
+  QUANTUM_AMM_ROUTER: "0xCCfB7a53c948866Eb68c0cdc4931CD856491719B".toLowerCase(), // QuantumAMMRouter
   ENTRYPOINT_ADDRESS: "0x0000000071727de22e5e9d8baf0edac6f37da032",
 
   // Bundler
-  BUNDLER_URL: "https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7",
+  BUNDLER_URL: "https://api.pimlico.io/v2/sepolia/rpc",
 };
 
 // Network configurations
