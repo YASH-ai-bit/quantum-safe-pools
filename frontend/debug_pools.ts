@@ -1,9 +1,14 @@
 import { createPublicClient, http, formatUnits } from "viem";
 import { sepolia } from "viem/chains";
+import * as dotenv from "dotenv";
+import * as path from "path";
 
-// Hardcode updated addresses to verify INDEPENDENTLY of local files
-const FACTORY_ADDRESS = "0xE5acFcC6bf0BB0f64204775526E033C76d2130a9";
-const RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/gM0WBanXaAgbz8juDtJ-5";
+// Load from frontend .env
+dotenv.config({ path: path.resolve(__dirname, ".env") });
+
+// Use environment variables
+const FACTORY_ADDRESS = (process.env.QUANTUM_AMM_FACTORY_ADDRESS || "0x0585057f47B2746b5c86CfD16466818D7Ca7CDbC") as `0x${string}`;
+const RPC_URL = process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org";
 
 const FACTORY_ABI = [
     {

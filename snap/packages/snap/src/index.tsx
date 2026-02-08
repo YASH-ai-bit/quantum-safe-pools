@@ -428,7 +428,7 @@ async function handleSignMessage(params: any) {
  * @param params
  */
 async function handleSendTransaction(origin: string, params: any) {
-  const { to, value, data, factoryAddress, rpcUrl, paymasterAddress, chainId } =
+  const { to, value, data, factoryAddress, rpcUrl, paymasterAddress, chainId, bundlerUrl: providedBundlerUrl } =
     params;
 
   // Validate required parameters
@@ -459,10 +459,9 @@ async function handleSendTransaction(origin: string, params: any) {
     paymasterAddress,
   });
 
-  // Fetch gas prices from Pimlico bundler for accurate pricing
-  const bundlerUrl =
-    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
-  logYellow('Fetching gas prices from Pimlico...');
+  // Use bundlerUrl from params, fallback to CONFIG if missing
+  const bundlerUrl = providedBundlerUrl || 'https://api.pimlico.io/v2/sepolia/rpc';
+  logYellow('Fetching gas prices from bundler...', { url: bundlerUrl.substring(0, 30) + '...' });
   const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
 
   // ------------------------------------------------------------------
@@ -938,6 +937,7 @@ async function handleBatchTransactions(
     rpcUrl,
     chainId,
     paymasterAddress,
+    bundlerUrl: providedBundlerUrl,
   } = params;
 
   if (
@@ -1066,9 +1066,9 @@ async function handleBatchTransactions(
   }
 
   // Fetch gas prices
-  const bundlerUrl =
-    'https://api.pimlico.io/v2/sepolia/rpc?apikey=pim_F88Z7Sa9dPfQAqifqmmBk7';
-  logYellow('Fetching gas prices from Pimlico...');
+  // Use bundlerUrl from params
+  const bundlerUrl = providedBundlerUrl || 'https://api.pimlico.io/v2/sepolia/rpc';
+  logYellow('Fetching gas prices from bundler...', { url: bundlerUrl.substring(0, 30) + '...' });
   const gasPrices = await fetchPimlicoGasPrices(bundlerUrl);
 
   // Construct UserOperation with batch callData
