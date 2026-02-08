@@ -44,14 +44,14 @@ export function LPTokenEducation() {
                         </ul>
                     </div>
 
-                    <div className="bg-amber-50 dark:bg-amber-950 p-4 rounded-lg">
+                    <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
                         <div className="flex items-start gap-2">
-                            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                            <AlertTriangle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                             <div className="flex-1">
-                                <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">
+                                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
                                     Things to Know
                                 </h3>
-                                <ul className="space-y-2 text-sm text-amber-800 dark:text-amber-200">
+                                <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
                                     <li>
                                         • <strong>Earn Fees:</strong> You automatically earn a share of trading fees as long as your tokens are in the pool
                                     </li>
