@@ -17,3 +17,8 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Pitch Deck
+*.pptx
+*.pdf
+pitch-deck/
