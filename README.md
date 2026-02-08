@@ -265,7 +265,7 @@ contracts/
 4. **Add Liquidity** → LP position encrypted with FHE
 5. **Swap with Privacy** → Trade amounts hidden on-chain
 
-**Try it**: [quantumpools.vercel.app](https://quantumpools.vercel.app) (demo)
+**Try it**: [quantumpools.vercel.app](https://quantum-pools.vercel.app) (demo)
 
 ## 💡 Why This Matters
 
