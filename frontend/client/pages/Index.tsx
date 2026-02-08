@@ -12,13 +12,14 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import GlitchText from "@/components/ui/GlitchText";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
 import { useSnap } from "@/hooks/useSnap";
-import { useState } from "react";
 
 export default function Index() {
   const {
@@ -53,7 +54,7 @@ export default function Index() {
                 <h1 className="text-5xl lg:text-6xl font-bold leading-tight mb-6 pixel-text text-foreground">
                   <span className="text-primary">QUANTUM</span>
                   <br />
-                  SAFE WALLET
+                  SAFE POOLS
                 </h1>
                 <p className="text-lg text-foreground/80 leading-relaxed pixel-text">
                   Secure your digital assets with quantum-resistant
@@ -151,7 +152,15 @@ export default function Index() {
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     ) : (
                       <p className="text-3xl font-bold text-foreground">
-                        {hideBalance ? "$****" : `$${totalBalance || "0.00"}`}
+                        {hideBalance ? (
+                          "$****"
+                        ) : (
+                          <GlitchText
+                            text={`$${totalBalance || "0.00"}`}
+                            trigger={!hideBalance}
+                            speed={30}
+                          />
+                        )}
                       </p>
                     )}
                   </div>
@@ -159,32 +168,70 @@ export default function Index() {
                   <div className="space-y-3 pixel-text text-sm">
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> eth_sep:"}</span>
-                      <span className="text-primary">
-                        {hideBalance ? "****" : ethBalance ? `${ethBalance.amount} ETH` : "0.00 ETH"}
+                      <span className="text-primary uppercase">
+                        {hideBalance ? (
+                          "****"
+                        ) : (
+                          <GlitchText
+                            text={ethBalance ? `${ethBalance.amount} ETH` : "0.00 ETH"}
+                            trigger={!hideBalance}
+                            speed={40}
+                          />
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> usdc:"}</span>
-                      <span className="text-primary">
-                        {hideBalance ? "****" : tokenBalances.find((t) => t.symbol === "USDC")
-                          ? `${tokenBalances.find((t) => t.symbol === "USDC")?.amount} USDC`
-                          : "0.00 USDC"}
+                      <span className="text-primary uppercase">
+                        {hideBalance ? (
+                          "****"
+                        ) : (
+                          <GlitchText
+                            text={
+                              tokenBalances.find((t) => t.symbol === "USDC")
+                                ? `${tokenBalances.find((t) => t.symbol === "USDC")?.amount} USDC`
+                                : "0.00 USDC"
+                            }
+                            trigger={!hideBalance}
+                            speed={45}
+                          />
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> pyusd:"}</span>
-                      <span className="text-primary">
-                        {hideBalance ? "****" : tokenBalances.find((t) => t.symbol === "PYUSD")
-                          ? `${tokenBalances.find((t) => t.symbol === "PYUSD")?.amount} PYUSD`
-                          : "0.00 PYUSD"}
+                      <span className="text-primary uppercase">
+                        {hideBalance ? (
+                          "****"
+                        ) : (
+                          <GlitchText
+                            text={
+                              tokenBalances.find((t) => t.symbol === "PYUSD")
+                                ? `${tokenBalances.find((t) => t.symbol === "PYUSD")?.amount} PYUSD`
+                                : "0.00 PYUSD"
+                            }
+                            trigger={!hideBalance}
+                            speed={50}
+                          />
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> link:"}</span>
-                      <span className="text-primary">
-                        {hideBalance ? "****" : tokenBalances.find((t) => t.symbol === "LINK")
-                          ? `${tokenBalances.find((t) => t.symbol === "LINK")?.amount} LINK`
-                          : "0.00 LINK"}
+                      <span className="text-primary uppercase">
+                        {hideBalance ? (
+                          "****"
+                        ) : (
+                          <GlitchText
+                            text={
+                              tokenBalances.find((t) => t.symbol === "LINK")
+                                ? `${tokenBalances.find((t) => t.symbol === "LINK")?.amount} LINK`
+                                : "0.00 LINK"
+                            }
+                            trigger={!hideBalance}
+                            speed={55}
+                          />
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
