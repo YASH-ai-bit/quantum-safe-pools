@@ -11,6 +11,8 @@ import {
   Wallet,
   AlertCircle,
   Lock,
+  ArrowLeft,
+  CheckCircle,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { usePools } from "@/hooks/usePools";
@@ -21,8 +23,20 @@ import { useTransactionHistory, TransactionType } from "@/hooks/useTransactionHi
 import { useLPMetrics } from "@/hooks/useLPMetrics";
 import { useQuantumRegistry } from "@/hooks/useQuantumRegistry";
 import { parseUnits, formatUnits, formatEther } from "viem";
+import { useAccount, usePublicClient } from "wagmi";
 import { CONTRACTS } from "@shared/contracts";
 import TransactionSuccessModal from "@/components/TransactionSuccessModal";
+
+// Minimal ERC20 ABI for balance checks
+const ERC20_ABI = [
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 // Token decimals mapping (common tokens)
 const TOKEN_DECIMALS: Record<string, number> = {
@@ -55,6 +69,7 @@ export default function PoolDetail() {
   const { isConnected, accountAddress } = useSnap();
   const { addTransaction } = useTransactionHistory();
   const { checkQuantumSafe } = useQuantumRegistry();
+  const publicClient = usePublicClient();
 
   // Check QS status for fee display
   const [isQuantumSafe, setIsQuantumSafe] = useState<boolean>(false);
@@ -445,6 +460,15 @@ export default function PoolDetail() {
 
       // Use batched operation - approval + swap in one transaction!
       // ~27% gas savings vs separate transactions
+
+      // Get initial balance to calculate exact received amount
+      const balanceBefore = (await publicClient.readContract({
+        address: tokenOut as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [accountAddress as `0x${string}`],
+      } as any)) as unknown as bigint;
+
       const result = await swapBatched(
         tokenIn,         // tokenIn address
         tokenOut,        // tokenOut address
@@ -452,16 +476,29 @@ export default function PoolDetail() {
         0n,              // amountOutMin (should use quote in production)
       );
 
+      // Get final balance
+      const balanceAfter = (await publicClient.readContract({
+        address: tokenOut as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [accountAddress as `0x${string}`],
+      } as any)) as unknown as bigint;
+
+      const receivedAmountWei = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0n;
+      const decimalsOut = getTokenDecimals(zeroForOne ? pool.token1Symbol : pool.token0Symbol);
+      const receivedAmountFormatted = formatUnits(receivedAmountWei, decimalsOut);
+
       handleSuccess(result);
 
-      // Track transaction and show success modal
+      // Track transaction and show success modal with REAL amount
       const txHash = result?.transactionHash || "";
       const tokenOutSymbol = zeroForOne ? pool.token1Symbol : pool.token0Symbol;
+
       addTransaction("swap", txHash, {
         fromToken: tokenInSymbol,
         toToken: tokenOutSymbol,
         fromAmount: swapAmountIn,
-        toAmount: swapOutputEstimate.amountOut.toFixed(6),
+        toAmount: receivedAmountFormatted, // Use real amount received!
         poolId: pool.id,
       });
       setSuccessModal({
@@ -472,7 +509,7 @@ export default function PoolDetail() {
           fromToken: tokenInSymbol,
           toToken: tokenOutSymbol,
           fromAmount: swapAmountIn,
-          toAmount: swapOutputEstimate.amountOut.toFixed(6),
+          toAmount: receivedAmountFormatted, // Use real amount received!
         },
       });
       setSwapAmountIn("");
