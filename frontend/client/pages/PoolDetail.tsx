@@ -26,6 +26,7 @@ import { parseUnits, formatUnits, formatEther } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { CONTRACTS } from "@shared/contracts";
 import TransactionSuccessModal from "@/components/TransactionSuccessModal";
+import { logDarkPoolTransaction } from "@/utils/logger";
 
 // Minimal ERC20 ABI for balance checks
 const ERC20_ABI = [
@@ -342,6 +343,18 @@ export default function PoolDetail() {
 
       handleSuccess(result);
 
+      // Log Dark Pool Transaction details to console
+      if (result?.transactionHash) {
+        try {
+          const receipt = await publicClient.getTransactionReceipt({ 
+            hash: result.transactionHash as `0x${string}` 
+          });
+          logDarkPoolTransaction(receipt);
+        } catch (e) {
+          console.error("Failed to log Dark Pool transaction details:", e);
+        }
+      }
+
       // Track transaction and show success modal
       const txHash = result?.transactionHash || "";
       addTransaction("add_liquidity", txHash, {
@@ -396,6 +409,18 @@ export default function PoolDetail() {
       );
 
       handleSuccess(result);
+
+      // Log Dark Pool Transaction details to console
+      if (result?.transactionHash) {
+        try {
+          const receipt = await publicClient.getTransactionReceipt({ 
+            hash: result.transactionHash as `0x${string}` 
+          });
+          logDarkPoolTransaction(receipt);
+        } catch (e) {
+          console.error("Failed to log Dark Pool transaction details:", e);
+        }
+      }
 
       // Track transaction and show success modal
       const txHash = result?.transactionHash || "";
@@ -493,6 +518,18 @@ export default function PoolDetail() {
       const receivedAmountFormatted = formatUnits(receivedAmountWei, decimalsOut);
 
       handleSuccess(result);
+
+      // Log Dark Pool Transaction details to console
+      if (result?.transactionHash) {
+        try {
+          const receipt = await publicClient.getTransactionReceipt({ 
+            hash: result.transactionHash as `0x${string}` 
+          });
+          logDarkPoolTransaction(receipt);
+        } catch (e) {
+          console.error("Failed to log Dark Pool transaction details:", e);
+        }
+      }
 
       // Track transaction and show success modal with REAL amount
       const txHash = result?.transactionHash || "";

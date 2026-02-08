@@ -28,9 +28,11 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
   useBalance,
+  usePublicClient,
 } from "wagmi";
 import { waitForTransactionReceipt } from "@wagmi/core";
 import { wagmiConfig } from "@/lib/wagmi";
+import { logDarkPoolTransaction } from "@/utils/logger";
 
 // Common token addresses on Sepolia - these should ideally be fetched from a token registry
 const TOKEN_ADDRESSES: Record<string, string> = {
@@ -113,6 +115,7 @@ export default function CreatePool() {
   // EOA Hooks
   const { address: eoaAddress, isConnected: isEoaConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
   const tokens = [
     { symbol: "ETH", name: "Ethereum", address: TOKEN_ADDRESSES.ETH },
@@ -462,6 +465,16 @@ export default function CreatePool() {
 
       // Mark steps as complete based on result
       if (result?.transactionHash) {
+        // Log Dark Pool Transaction details to console
+        try {
+          const receipt = await publicClient.getTransactionReceipt({ 
+            hash: result.transactionHash as `0x${string}` 
+          });
+          logDarkPoolTransaction(receipt);
+        } catch (e) {
+          console.error("Failed to log Dark Pool transaction details:", e);
+        }
+
         // Mark all quantum steps as complete
         setCreationSteps((prev) =>
           prev.map((s) => {
