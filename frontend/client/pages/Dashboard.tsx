@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { Send, Download, TrendingUp, Wallet, BarChart3, DollarSign, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Send, Download, TrendingUp, Wallet, BarChart3, DollarSign, Eye, EyeOff, Loader2, Plus } from "lucide-react";
 import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useWalletData } from "@/hooks/useWalletData";
@@ -18,8 +18,14 @@ export default function Dashboard() {
   const { pools, loading: poolsLoading } = usePools();
   const { getRecentTransactions, formatTime, getTypeLabel } = useTransactionHistory();
 
-  // Calculate total liquidity provided from LP positions
-  const totalLiquidityProvided = lpPositions.reduce((sum, pos) => sum + parseFloat(pos.value || '0'), 0).toFixed(2);
+  // Calculate total liquidity provided from LP positions (exclude dark pools)
+  const totalLiquidityProvided = lpPositions
+    .filter(pos => {
+      const value = parseFloat(pos.value || '0');
+      return !isNaN(value) && value > 0;
+    })
+    .reduce((sum, pos) => sum + parseFloat(pos.value), 0)
+    .toFixed(2);
 
   // Get recent transactions from localStorage
   const recentTransactions = getRecentTransactions(10);
@@ -33,13 +39,21 @@ export default function Dashboard() {
     { name: "May", value: parseFloat(totalBalance) || 0 },
   ];
 
-  // Calculate asset allocation from token balances
+  // Calculate asset allocation from token balances (exclude dark pool LPs with NaN values)
   const totalValue = parseFloat(totalBalance) || 0;
-  const allocationData = tokenBalances.length > 0
-    ? tokenBalances.map(token => ({
-      name: token.name,
-      value: totalValue > 0 ? Math.round((parseFloat(token.value.replace('$', '').replace(',', '')) / totalValue) * 100) : 0,
-    }))
+  const validTokenBalances = tokenBalances.filter(token => {
+    const value = parseFloat(token.value.replace('$', '').replace(',', ''));
+    return !isNaN(value) && value >= 0;
+  });
+
+  const allocationData = validTokenBalances.length > 0
+    ? validTokenBalances.map(token => {
+      const tokenValue = parseFloat(token.value.replace('$', '').replace(',', ''));
+      return {
+        name: token.name,
+        value: totalValue > 0 ? Math.round((tokenValue / totalValue) * 100) : 0,
+      };
+    })
     : [{ name: "No Assets", value: 100 }];
 
   // Distinct colors for chart slices
@@ -127,7 +141,16 @@ export default function Dashboard() {
                 {walletLoading ? (
                   <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
                 ) : (
-                  <p className="text-3xl font-bold text-foreground pixel-text">${totalLiquidityProvided}</p>
+                  <div className="flex items-center gap-2 group/liquidity relative">
+                    <p className="text-3xl font-bold text-foreground pixel-text">${totalLiquidityProvided}</p>
+                    <div className="relative">
+                      <Plus className="w-5 h-5 text-primary cursor-help" />
+                      <div className="absolute left-0 bottom-full mb-2 w-56 p-2 bg-primary text-black text-xs font-bold rounded opacity-0 group-hover/liquidity:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg border-2 border-primary-foreground">
+                        + Additional liquidity in Dark Pools (private)
+                        <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-primary"></div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
