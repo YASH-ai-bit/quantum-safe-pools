@@ -180,7 +180,7 @@ export function useWalletData() {
                 abi: ERC20_ABI,
                 functionName: "balanceOf",
                 args: [addr],
-              }) as bigint;
+              } as any) as bigint;
               totalBalance += balance;
             } catch (err) {
               // Ignore individual read errors
@@ -284,12 +284,13 @@ export function useWalletData() {
       for (const position of lpPositions) {
         const pool = pools.find(p => p.id === position.poolId);
         if (pool) {
+          const suffix = pool.poolType === 'dark' ? 'DLP' : 'LP';
           const poolName = `${pool.token0Symbol || 'TOKEN0'}-${pool.token1Symbol || 'TOKEN1'}`;
 
           balances.push({
-            symbol: `${poolName} LP`, // Changed from 'LP' to pool-specific
-            name: `${poolName} LP`,
-            amount: formatUnits(position.balance, 18),
+            symbol: `${poolName} ${suffix}`,
+            name: `${poolName} ${suffix}`,
+            amount: formatUnits(position.balance as bigint, 18),
             value: `$${position.value}`,
             address: position.poolId,
             isLP: true,

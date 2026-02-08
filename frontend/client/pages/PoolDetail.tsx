@@ -297,6 +297,9 @@ export default function PoolDetail() {
     );
   }
 
+  // Define LP label
+  const lpLabel = pool.poolType === 'dark' ? 'DLP' : 'LP';
+
   const handleAddLiquidity = async () => {
     if (!isConnected) {
       setError("Please connect MetaMask Flask first");
@@ -414,6 +417,7 @@ export default function PoolDetail() {
           fromAmount: removeEstimate.token0.toFixed(6),
           toAmount: removeEstimate.token1.toFixed(6),
           lpAmount: removeAmount,
+          lpTokenLabel: lpLabel,
         },
       });
       setRemoveAmount("");
@@ -639,9 +643,9 @@ export default function PoolDetail() {
                       </p>
                     </div>
                     <div className="p-4 border border-primary/50">
-                      <p className="text-foreground/60 text-sm mb-2">TOTAL_LP_SUPPLY</p>
+                      <p className="text-foreground/60 text-sm mb-2">TOTAL_{lpLabel}_SUPPLY</p>
                       <p className="text-foreground font-bold text-xl">
-                        {parseFloat(formatEther(pool.liquidity)).toFixed(4)} LP
+                        {parseFloat(formatEther(pool.liquidity)).toFixed(4)} {lpLabel}
                       </p>
                     </div>
                     <div className="p-4 border border-primary/50">
@@ -685,7 +689,7 @@ export default function PoolDetail() {
                         <p className="text-xs text-foreground/50">If you just held tokens</p>
                       </div>
                       <div>
-                        <p className="text-foreground/60 text-sm mb-1">CURRENT_LP_VALUE</p>
+                        <p className="text-foreground/60 text-sm mb-1">CURRENT_{lpLabel}_VALUE</p>
                         <p className="text-foreground font-bold text-lg">
                           ${metrics.lpValueUSD.toFixed(2)}
                         </p>
@@ -710,9 +714,9 @@ export default function PoolDetail() {
                     <h3 className="text-xl font-bold text-primary mb-4">YOUR_POSITION</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <p className="text-foreground/60 text-sm mb-1">LP_TOKENS</p>
+                        <p className="text-foreground/60 text-sm mb-1">{lpLabel}_TOKENS</p>
                         <p className="text-foreground font-bold text-lg">
-                          {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                          {parseFloat(userLpBalanceFormatted).toFixed(6)} {lpLabel}
                         </p>
                       </div>
                       <div>
@@ -733,7 +737,7 @@ export default function PoolDetail() {
 
                 {userLpBalance === 0n && isConnected && (
                   <div className="mt-6 p-4 border border-foreground/20 bg-foreground/5 text-center">
-                    <p className="text-foreground/60">You don't have any LP tokens in this pool yet.</p>
+                    <p className="text-foreground/60">You don't have any {lpLabel} tokens in this pool yet.</p>
                     <button
                       onClick={() => setActiveTab("add")}
                       className="mt-2 text-primary hover:underline"
@@ -846,9 +850,9 @@ export default function PoolDetail() {
                 <div className="p-4 border border-primary/50 bg-primary/5">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-foreground/60 text-sm">YOUR_LP_BALANCE</p>
+                      <p className="text-foreground/60 text-sm">YOUR_{lpLabel}_BALANCE</p>
                       <p className="text-foreground font-bold text-xl">
-                        {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                        {parseFloat(userLpBalanceFormatted).toFixed(6)} {lpLabel}
                       </p>
                     </div>
                     <div className="text-right">
@@ -862,7 +866,7 @@ export default function PoolDetail() {
 
                 {userLpBalance === 0n && (
                   <div className="p-4 border-2 border-yellow-500/50 bg-yellow-500/10 text-center">
-                    <p className="text-yellow-500">You don't have any LP tokens to remove.</p>
+                    <p className="text-yellow-500">You don't have any {lpLabel} tokens to remove.</p>
                     <button
                       onClick={() => setActiveTab("add")}
                       className="mt-2 text-primary hover:underline"
@@ -877,7 +881,7 @@ export default function PoolDetail() {
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <label className="block text-sm font-semibold text-foreground">
-                          LP_AMOUNT_TO_REMOVE
+                          {lpLabel}_AMOUNT_TO_REMOVE
                         </label>
                         <button
                           onClick={() => setRemoveAmount(userLpBalanceFormatted)}
@@ -895,7 +899,7 @@ export default function PoolDetail() {
                         max={userLpBalanceFormatted}
                       />
                       <p className="text-xs text-foreground/50 mt-1">
-                        Available: {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                        Available: {parseFloat(userLpBalanceFormatted).toFixed(6)} {lpLabel}
                       </p>
                     </div>
 
