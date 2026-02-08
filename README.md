@@ -209,13 +209,13 @@ Gas premium justified by **confidentiality value**.
 
 ```bash
 # Clone repo
-git clone https://github.com/yourusername/quantumpools
+git clone https://github.com/YASH-ai-bit/quantum-safe-pools
 cd quantumpools
 
 # Install dependencies
 cd contracts && forge install
 cd ../frontend && npm install
-cd ../snap && npm install
+cd ../snap && yarn install
 
 # Set environment variables
 cp contracts/.env.example contracts/.env
@@ -240,7 +240,7 @@ npm run dev
 
 ```bash
 cd snap
-npm run build
+yarn build
 # Load unpacked extension in MetaMask Flask
 ```
 
