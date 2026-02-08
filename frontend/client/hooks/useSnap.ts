@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { RPC_URLS, CHAIN_ID, CONTRACTS, BUNDLER_URLS } from "@shared/contracts";
 import { submitUserOpToBundler, waitForUserOpReceipt } from "../utils/bundler";
 
-const SNAP_ID = "local:http://localhost:8080"; // Update with deployed snap ID
+const SNAP_ID = "npm:quantum-pools-snap"; // Production Snap ID
 const DISCONNECTED_KEY = "quantum_snap_disconnected"; // localStorage key
 
 interface SnapState {
