@@ -180,24 +180,18 @@
     @apply transition-all cursor-pointer;
 
     &:hover {
-      animation: glitch 0.3s ease-out;
       box-shadow: 0 0 20px hsl(90 100% 50% / 0.6);
     }
   }
 
   .cypher-hover {
     @apply transition-all cursor-pointer;
-
-    &:hover {
-      animation: cypher 0.6s ease-out;
-    }
   }
 
   .glitch-text-hover {
     @apply transition-all;
 
     &:hover {
-      animation: cypher 0.6s ease-out;
       text-shadow: 0 0 20px hsl(90 100% 50% / 0.8), 0 0 40px hsl(90 100% 50% / 0.4);
     }
   }
@@ -208,5 +202,49 @@
 
   .tertiary-border {
     @apply border border-primary/20;
+  }
+}
+
+@keyframes glitch {
+  0% {
+    transform: translate(0);
+  }
+
+  20% {
+    transform: translate(-3px, 3px);
+  }
+
+  40% {
+    transform: translate(-3px, -3px);
+  }
+
+  60% {
+    transform: translate(3px, 3px);
+  }
+
+  80% {
+    transform: translate(3px, -3px);
+  }
+
+  100% {
+    transform: translate(0);
+  }
+}
+
+@keyframes cypher {
+  0% {
+    filter: blur(0px);
+    letter-spacing: normal;
+  }
+
+  50% {
+    filter: blur(1px);
+    letter-spacing: 0.1em;
+    color: hsl(90 100% 50%);
+  }
+
+  100% {
+    filter: blur(0px);
+    letter-spacing: normal;
   }
 }

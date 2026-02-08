@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import ConnectSnapButton from "../ConnectSnapButton";
+import GlitchText from "../ui/GlitchText";
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,20 +25,20 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link to="/" className="text-foreground hover:text-primary transition pixel-text text-sm">
-              $ home
+            <Link to="/" className="text-foreground hover:text-primary transition pixel-text text-sm group">
+              <GlitchText text="$ home" speed={30} />
             </Link>
-            <Link to="/dashboard" className="text-foreground hover:text-primary transition pixel-text text-sm">
-              $ dashboard
+            <Link to="/dashboard" className="text-foreground hover:text-primary transition pixel-text text-sm group">
+              <GlitchText text="$ dashboard" speed={30} />
             </Link>
-            <Link to="/pools" className="text-foreground hover:text-primary transition pixel-text text-sm">
-              $ pools
+            <Link to="/pools" className="text-foreground hover:text-primary transition pixel-text text-sm group">
+              <GlitchText text="$ pools" speed={30} />
             </Link>
-            <Link to="/create-pool" className="text-foreground hover:text-primary transition pixel-text text-sm">
-              $ create
+            <Link to="/create-pool" className="text-foreground hover:text-primary transition pixel-text text-sm group">
+              <GlitchText text="$ create" speed={30} />
             </Link>
-            <Link to="/wallet" className="text-foreground hover:text-primary transition pixel-text text-sm">
-              $ wallet
+            <Link to="/wallet" className="text-foreground hover:text-primary transition pixel-text text-sm group">
+              <GlitchText text="$ wallet" speed={30} />
             </Link>
           </nav>
 
