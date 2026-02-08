@@ -989,11 +989,20 @@ export default function PoolDetail() {
                         {swapTokenIn === "token0" ? pool.token1Symbol : pool.token0Symbol}
                       </div>
                       <div className="flex-1 px-4 py-3 bg-black/50 text-foreground text-right text-xl border-2 border-primary/50 pixel-text">
-                        {swapOutputEstimate.amountOut > 0
-                          ? swapOutputEstimate.amountOut.toFixed(6)
-                          : "0.0"}
+                        {swapOutputEstimate.amountOut > 0 ? (
+                          swapOutputEstimate.amountOut.toFixed(6)
+                        ) : pool.poolType === "dark" && parseFloat(swapAmountIn) > 0 ? (
+                          <span className="text-purple-400 text-sm">Calculated by contract</span>
+                        ) : (
+                          "0.0"
+                        )}
                       </div>
                     </div>
+                    {pool.poolType === "dark" && parseFloat(swapAmountIn) > 0 && swapOutputEstimate.amountOut === 0 && (
+                      <p className="text-xs text-purple-400 mt-2">
+                        🔒 Output amount hidden for privacy. The contract will calculate your exact output.
+                      </p>
+                    )}
                   </div>
 
                   {/* Exchange Rate & Price Impact */}
