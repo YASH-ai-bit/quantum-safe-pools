@@ -72,13 +72,13 @@ export function LPTokenEducation() {
                     <div>
                         <h3 className="font-semibold mb-2">Example</h3>
                         <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-sm space-y-1">
-                            <p>
+                            <p className="text-gray-900 dark:text-gray-100">
                                 <strong>You add:</strong> 100 USDC + 100 PYUSD to the pool
                             </p>
-                            <p className="text-green-600 dark:text-green-400">
+                            <p className="text-green-700 dark:text-green-300">
                                 <strong>You receive:</strong> LP tokens worth ~$200
                             </p>
-                            <p className="text-muted-foreground text-xs mt-2">
+                            <p className="text-gray-700 dark:text-gray-300 text-xs mt-2">
                                 Your LP tokens represent your share of the pool. If you're the first person, you own almost 100% of it!
                             </p>
                         </div>
