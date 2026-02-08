@@ -7,10 +7,11 @@
     "url": "https://github.com/MetaMask/template-snap-monorepo.git"
   },
   "source": {
-    "shasum": "CXfEXHDe1cw79KdBgwSfofrMUjUaKR6ObF4aYRcbPcc=",
+    "shasum": "vKFzLfO9GOfu2/K0vjtiD0FxtiLYV6jp4KxcEJi/bEU=",
     "location": {
       "npm": {
         "filePath": "dist/bundle.js",
+        "iconPath": "images/icon.svg",
         "packageName": "quantum-pools-snap",
         "registry": "https://registry.npmjs.org/"
       }
