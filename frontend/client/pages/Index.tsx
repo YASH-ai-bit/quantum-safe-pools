@@ -9,6 +9,8 @@ import {
   Users,
   Loader2,
   Copy,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -16,6 +18,7 @@ import { useWalletData } from "@/hooks/useWalletData";
 import { usePools } from "@/hooks/usePools";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
 import { useSnap } from "@/hooks/useSnap";
+import { useState } from "react";
 
 export default function Index() {
   const {
@@ -26,6 +29,7 @@ export default function Index() {
   const { pools, loading: poolsLoading } = usePools();
   const { stats, loading: statsLoading } = usePlatformStats();
   const { accountAddress, isConnected } = useSnap();
+  const [hideBalance, setHideBalance] = useState(false);
 
   // Get top 2 pools by TVL
   const topPools = pools
@@ -131,12 +135,21 @@ export default function Index() {
                   )}
 
                   <div className="space-y-2 pixel-text text-primary">
-                    <p className="text-sm">{"> Balance:"}</p>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm">{"> Balance:"}</p>
+                      <button
+                        onClick={() => setHideBalance(!hideBalance)}
+                        className="p-2 hover:bg-primary/20 transition text-foreground/60 hover:text-primary border border-primary/30"
+                        title={hideBalance ? "Show values" : "Hide values"}
+                      >
+                        {hideBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     {walletLoading ? (
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     ) : (
                       <p className="text-3xl font-bold text-foreground">
-                        ${totalBalance || "0.00"}
+                        {hideBalance ? "$****" : `$${totalBalance || "0.00"}`}
                       </p>
                     )}
                   </div>
@@ -145,13 +158,13 @@ export default function Index() {
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> eth_sep:"}</span>
                       <span className="text-primary">
-                        {ethBalance ? `${ethBalance.amount} ETH` : "0.00 ETH"}
+                        {hideBalance ? "****" : ethBalance ? `${ethBalance.amount} ETH` : "0.00 ETH"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> usdc:"}</span>
                       <span className="text-primary">
-                        {tokenBalances.find((t) => t.symbol === "USDC")
+                        {hideBalance ? "****" : tokenBalances.find((t) => t.symbol === "USDC")
                           ? `${tokenBalances.find((t) => t.symbol === "USDC")?.amount} USDC`
                           : "0.00 USDC"}
                       </span>
@@ -159,7 +172,7 @@ export default function Index() {
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> pyusd:"}</span>
                       <span className="text-primary">
-                        {tokenBalances.find((t) => t.symbol === "PYUSD")
+                        {hideBalance ? "****" : tokenBalances.find((t) => t.symbol === "PYUSD")
                           ? `${tokenBalances.find((t) => t.symbol === "PYUSD")?.amount} PYUSD`
                           : "0.00 PYUSD"}
                       </span>
@@ -167,7 +180,7 @@ export default function Index() {
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> link:"}</span>
                       <span className="text-primary">
-                        {tokenBalances.find((t) => t.symbol === "LINK")
+                        {hideBalance ? "****" : tokenBalances.find((t) => t.symbol === "LINK")
                           ? `${tokenBalances.find((t) => t.symbol === "LINK")?.amount} LINK`
                           : "0.00 LINK"}
                       </span>
@@ -175,7 +188,7 @@ export default function Index() {
                     <div className="flex justify-between items-center text-foreground/80">
                       <span>{"> lp_tokens:"}</span>
                       <span className="text-primary">
-                        {tokenBalances.filter((t) => t.isLP).length > 0
+                        {hideBalance ? "****" : tokenBalances.filter((t) => t.isLP).length > 0
                           ? `${tokenBalances.filter((t) => t.isLP).length} positions`
                           : "0 positions"}
                       </span>
