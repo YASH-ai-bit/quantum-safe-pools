@@ -14,6 +14,7 @@ export interface TransactionSuccessModalProps {
         fromAmount?: string;
         toAmount?: string;
         lpAmount?: string;
+        lpTokenLabel?: string;
     };
 }
 
@@ -124,7 +125,7 @@ export default function TransactionSuccessModal({
                                 )}
                                 {details.lpAmount && (
                                     <div className="flex justify-between text-sm pixel-text border-t border-primary/30 pt-2 mt-2">
-                                        <span className="text-foreground/60">LP Tokens</span>
+                                        <span className="text-foreground/60">{details.lpTokenLabel || "LP Tokens"}</span>
                                         <span className="text-primary font-bold">{details.lpAmount}</span>
                                     </div>
                                 )}

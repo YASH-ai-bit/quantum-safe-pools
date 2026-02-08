@@ -11,6 +11,8 @@ import {
   Wallet,
   AlertCircle,
   Lock,
+  ArrowLeft,
+  CheckCircle,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { usePools } from "@/hooks/usePools";
@@ -21,8 +23,20 @@ import { useTransactionHistory, TransactionType } from "@/hooks/useTransactionHi
 import { useLPMetrics } from "@/hooks/useLPMetrics";
 import { useQuantumRegistry } from "@/hooks/useQuantumRegistry";
 import { parseUnits, formatUnits, formatEther } from "viem";
+import { useAccount, usePublicClient } from "wagmi";
 import { CONTRACTS } from "@shared/contracts";
 import TransactionSuccessModal from "@/components/TransactionSuccessModal";
+
+// Minimal ERC20 ABI for balance checks
+const ERC20_ABI = [
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 // Token decimals mapping (common tokens)
 const TOKEN_DECIMALS: Record<string, number> = {
@@ -55,6 +69,7 @@ export default function PoolDetail() {
   const { isConnected, accountAddress } = useSnap();
   const { addTransaction } = useTransactionHistory();
   const { checkQuantumSafe } = useQuantumRegistry();
+  const publicClient = usePublicClient();
 
   // Check QS status for fee display
   const [isQuantumSafe, setIsQuantumSafe] = useState<boolean>(false);
@@ -282,6 +297,9 @@ export default function PoolDetail() {
     );
   }
 
+  // Define LP label
+  const lpLabel = pool.poolType === 'dark' ? 'DLP' : 'LP';
+
   const handleAddLiquidity = async () => {
     if (!isConnected) {
       setError("Please connect MetaMask Flask first");
@@ -399,6 +417,7 @@ export default function PoolDetail() {
           fromAmount: removeEstimate.token0.toFixed(6),
           toAmount: removeEstimate.token1.toFixed(6),
           lpAmount: removeAmount,
+          lpTokenLabel: lpLabel,
         },
       });
       setRemoveAmount("");
@@ -445,6 +464,15 @@ export default function PoolDetail() {
 
       // Use batched operation - approval + swap in one transaction!
       // ~27% gas savings vs separate transactions
+
+      // Get initial balance to calculate exact received amount
+      const balanceBefore = (await publicClient.readContract({
+        address: tokenOut as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [accountAddress as `0x${string}`],
+      } as any)) as unknown as bigint;
+
       const result = await swapBatched(
         tokenIn,         // tokenIn address
         tokenOut,        // tokenOut address
@@ -452,16 +480,29 @@ export default function PoolDetail() {
         0n,              // amountOutMin (should use quote in production)
       );
 
+      // Get final balance
+      const balanceAfter = (await publicClient.readContract({
+        address: tokenOut as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [accountAddress as `0x${string}`],
+      } as any)) as unknown as bigint;
+
+      const receivedAmountWei = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0n;
+      const decimalsOut = getTokenDecimals(zeroForOne ? pool.token1Symbol : pool.token0Symbol);
+      const receivedAmountFormatted = formatUnits(receivedAmountWei, decimalsOut);
+
       handleSuccess(result);
 
-      // Track transaction and show success modal
+      // Track transaction and show success modal with REAL amount
       const txHash = result?.transactionHash || "";
       const tokenOutSymbol = zeroForOne ? pool.token1Symbol : pool.token0Symbol;
+
       addTransaction("swap", txHash, {
         fromToken: tokenInSymbol,
         toToken: tokenOutSymbol,
         fromAmount: swapAmountIn,
-        toAmount: swapOutputEstimate.amountOut.toFixed(6),
+        toAmount: receivedAmountFormatted, // Use real amount received!
         poolId: pool.id,
       });
       setSuccessModal({
@@ -472,7 +513,7 @@ export default function PoolDetail() {
           fromToken: tokenInSymbol,
           toToken: tokenOutSymbol,
           fromAmount: swapAmountIn,
-          toAmount: swapOutputEstimate.amountOut.toFixed(6),
+          toAmount: receivedAmountFormatted, // Use real amount received!
         },
       });
       setSwapAmountIn("");
@@ -602,9 +643,9 @@ export default function PoolDetail() {
                       </p>
                     </div>
                     <div className="p-4 border border-primary/50">
-                      <p className="text-foreground/60 text-sm mb-2">TOTAL_LP_SUPPLY</p>
+                      <p className="text-foreground/60 text-sm mb-2">TOTAL_{lpLabel}_SUPPLY</p>
                       <p className="text-foreground font-bold text-xl">
-                        {parseFloat(formatEther(pool.liquidity)).toFixed(4)} LP
+                        {parseFloat(formatEther(pool.liquidity)).toFixed(4)} {lpLabel}
                       </p>
                     </div>
                     <div className="p-4 border border-primary/50">
@@ -648,7 +689,7 @@ export default function PoolDetail() {
                         <p className="text-xs text-foreground/50">If you just held tokens</p>
                       </div>
                       <div>
-                        <p className="text-foreground/60 text-sm mb-1">CURRENT_LP_VALUE</p>
+                        <p className="text-foreground/60 text-sm mb-1">CURRENT_{lpLabel}_VALUE</p>
                         <p className="text-foreground font-bold text-lg">
                           ${metrics.lpValueUSD.toFixed(2)}
                         </p>
@@ -673,9 +714,9 @@ export default function PoolDetail() {
                     <h3 className="text-xl font-bold text-primary mb-4">YOUR_POSITION</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <p className="text-foreground/60 text-sm mb-1">LP_TOKENS</p>
+                        <p className="text-foreground/60 text-sm mb-1">{lpLabel}_TOKENS</p>
                         <p className="text-foreground font-bold text-lg">
-                          {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                          {parseFloat(userLpBalanceFormatted).toFixed(6)} {lpLabel}
                         </p>
                       </div>
                       <div>
@@ -696,7 +737,7 @@ export default function PoolDetail() {
 
                 {userLpBalance === 0n && isConnected && (
                   <div className="mt-6 p-4 border border-foreground/20 bg-foreground/5 text-center">
-                    <p className="text-foreground/60">You don't have any LP tokens in this pool yet.</p>
+                    <p className="text-foreground/60">You don't have any {lpLabel} tokens in this pool yet.</p>
                     <button
                       onClick={() => setActiveTab("add")}
                       className="mt-2 text-primary hover:underline"
@@ -809,9 +850,9 @@ export default function PoolDetail() {
                 <div className="p-4 border border-primary/50 bg-primary/5">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-foreground/60 text-sm">YOUR_LP_BALANCE</p>
+                      <p className="text-foreground/60 text-sm">YOUR_{lpLabel}_BALANCE</p>
                       <p className="text-foreground font-bold text-xl">
-                        {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                        {parseFloat(userLpBalanceFormatted).toFixed(6)} {lpLabel}
                       </p>
                     </div>
                     <div className="text-right">
@@ -825,7 +866,7 @@ export default function PoolDetail() {
 
                 {userLpBalance === 0n && (
                   <div className="p-4 border-2 border-yellow-500/50 bg-yellow-500/10 text-center">
-                    <p className="text-yellow-500">You don't have any LP tokens to remove.</p>
+                    <p className="text-yellow-500">You don't have any {lpLabel} tokens to remove.</p>
                     <button
                       onClick={() => setActiveTab("add")}
                       className="mt-2 text-primary hover:underline"
@@ -840,7 +881,7 @@ export default function PoolDetail() {
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <label className="block text-sm font-semibold text-foreground">
-                          LP_AMOUNT_TO_REMOVE
+                          {lpLabel}_AMOUNT_TO_REMOVE
                         </label>
                         <button
                           onClick={() => setRemoveAmount(userLpBalanceFormatted)}
@@ -858,7 +899,7 @@ export default function PoolDetail() {
                         max={userLpBalanceFormatted}
                       />
                       <p className="text-xs text-foreground/50 mt-1">
-                        Available: {parseFloat(userLpBalanceFormatted).toFixed(6)} LP
+                        Available: {parseFloat(userLpBalanceFormatted).toFixed(6)} {lpLabel}
                       </p>
                     </div>
 
@@ -989,11 +1030,22 @@ export default function PoolDetail() {
                         {swapTokenIn === "token0" ? pool.token1Symbol : pool.token0Symbol}
                       </div>
                       <div className="flex-1 px-4 py-3 bg-black/50 text-foreground text-right text-xl border-2 border-primary/50 pixel-text">
-                        {swapOutputEstimate.amountOut > 0
-                          ? swapOutputEstimate.amountOut.toFixed(6)
-                          : "0.0"}
+                        {swapOutputEstimate.amountOut > 0 ? (
+                          swapOutputEstimate.amountOut.toFixed(6)
+                        ) : pool.poolType === "dark" && parseFloat(swapAmountIn) > 0 ? (
+                          <span className="text-purple-400 text-sm">
+                            ~{(parseFloat(swapAmountIn) * 0.95).toFixed(4)} - {(parseFloat(swapAmountIn) * 0.997).toFixed(4)}
+                          </span>
+                        ) : (
+                          "0.0"
+                        )}
                       </div>
                     </div>
+                    {pool.poolType === "dark" && parseFloat(swapAmountIn) > 0 && swapOutputEstimate.amountOut === 0 && (
+                      <p className="text-xs text-purple-400 mt-2">
+                        🔒 Estimated range (assuming ~1:1 rate). Exact output calculated by contract.
+                      </p>
+                    )}
                   </div>
 
                   {/* Exchange Rate & Price Impact */}

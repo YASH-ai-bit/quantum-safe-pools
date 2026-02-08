@@ -216,7 +216,7 @@ export default function Wallet() {
                     abi: ERC20_ABI,
                     functionName: 'transfer',
                     args: [accountAddress as `0x${string}`, units],
-                });
+                } as any);
             }
         } catch (err: any) {
             setError(err.message);
@@ -390,12 +390,6 @@ export default function Wallet() {
                                 {/* RECEIVE TAB */}
                                 {activeTab === 'receive' && (
                                     <div className="flex flex-col items-center text-center space-y-6 py-4">
-                                        <div className="p-4 bg-white rounded-lg">
-                                            {/* Placeholder QR Code */}
-                                            <div className="w-32 h-32 bg-black flex items-center justify-center">
-                                                <ArrowDownLeft className="h-12 w-12 text-white" />
-                                            </div>
-                                        </div>
                                         <div>
                                             <p className="text-xs text-foreground/60 pixel-text mb-2">YOUR_QUANTUM_ADDRESS</p>
                                             <p className="font-mono text-xs text-primary break-all bg-primary/5 p-2 border border-primary/20">

@@ -12,17 +12,21 @@ export function usePlatformStats() {
 
   useEffect(() => {
     if (!loading && pools.length > 0) {
-      // Calculate total TVL from all pools
-      const totalTVL = pools.reduce((sum, pool) => {
-        return sum + parseFloat(pool.tvl || '0');
+      // Filter out dark pools from statistics (they have PRIVATE values)
+      const publicPools = pools.filter(pool => pool.poolType !== 'dark');
+
+      // Calculate total TVL from public pools only
+      const totalTVL = publicPools.reduce((sum, pool) => {
+        const tvl = parseFloat(pool.tvl || '0');
+        return sum + (isNaN(tvl) ? 0 : tvl);
       }, 0);
 
-      // Calculate average APY
-      const totalAPY = pools.reduce((sum, pool) => {
+      // Calculate average APY from public pools only
+      const totalAPY = publicPools.reduce((sum, pool) => {
         const apy = parseFloat(pool.apy?.replace('%', '') || '0');
-        return sum + apy;
+        return sum + (isNaN(apy) ? 0 : apy);
       }, 0);
-      const avgAPY = pools.length > 0 ? (totalAPY / pools.length).toFixed(2) : '0';
+      const avgAPY = publicPools.length > 0 ? (totalAPY / publicPools.length).toFixed(2) : '0';
 
       // Format TVL
       let tvlFormatted = '0';
@@ -39,7 +43,7 @@ export function usePlatformStats() {
       setStats({
         totalTVL: tvlFormatted,
         avgAPY: `${avgAPY}%`,
-        liquidityPools: pools.length.toString(),
+        liquidityPools: publicPools.length.toString(), // Count public pools only
         uptime: '99.99%',
       });
     } else if (!loading) {
