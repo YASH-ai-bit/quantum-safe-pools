@@ -1,0 +1,73 @@
+========================================================
+QUANTUM POOLS - OFFICIAL USDC/PYUSD DEPLOYMENT
+========================================================
+Deployment Date: 2025
+Network: Sepolia Testnet (ChainID 11155111)
+Block: 10213859
+Deployer: 0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e
+
+========================================================
+DEPLOYED ADDRESSES
+========================================================
+
+Official Token0 (USDC):  0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+Official Token1 (PYUSD): 0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9
+USDC/PYUSD Pool:         0x9b3353b8Eb1B391C482957bD8a4EA4083c5c4e15
+
+========================================================
+TRANSACTION DETAILS
+========================================================
+
+Pool Deployment:
+  Tx Hash: 0x06de5b338f4e9b0d71d25eedab504597c90924f8b60fcbde4710bd53dd938ec5
+  Gas Used: 2,023,628
+  Gas Price: 3 gwei
+  Total Cost: 0.006070884 ETH
+  Etherscan: https://sepolia.etherscan.io/tx/0x06de5b338f4e9b0d71d25eedab504597c90924f8b60fcbde4710bd53dd938ec5
+
+========================================================
+ZAMA FHE INFRASTRUCTURE
+========================================================
+
+FHE Coprocessor:  0x92C920834Ec8941d2C77D188936E1f7A6f49c127
+ACL:              0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D
+Gateway:          0x33347831500F1e73F0253F8f6B4e33aa4fBb17E9
+KMS Verifier:     0xbE0E383937d564D7FF0BC3b46c51f0bF8d5C311A
+
+========================================================
+IMPORTANT NOTES
+========================================================
+
+1. TOKEN ACQUISITION
+   - These are OFFICIAL tokens, NOT mintable mock tokens
+   - USDC: Get from Circle USDC Sepolia Faucet
+   - PYUSD: Get from PayPal PYUSD sources or bridge
+   - Check balances before testing:
+     cast call 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 "balanceOf(address)" YOUR_ADDRESS
+     cast call 0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9 "balanceOf(address)" YOUR_ADDRESS
+
+2. POOL FEATURES
+   - Hybrid FHE: Encrypted LP positions, encrypted orders
+   - Plaintext reserves (required for AMM math)
+   - Real Zama fhEVM integration (not mock)
+   - Single pair: USDC/PYUSD only
+
+3. FRONTEND INTEGRATION
+   - Update pool address in frontend config
+   - Update token addresses to official ones
+   - User must have official USDC/PYUSD in wallet
+
+========================================================
+VERIFICATION
+========================================================
+
+View Pool on Etherscan:
+https://sepolia.etherscan.io/address/0x9b3353b8Eb1B391C482957bD8a4EA4083c5c4e15
+
+View USDC on Etherscan:
+https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+
+View PYUSD on Etherscan:
+https://sepolia.etherscan.io/address/0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9
+
+========================================================

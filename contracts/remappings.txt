@@ -3,3 +3,4 @@
 @uniswap/v4-core/=lib/v4-core/
 @uniswap/v4-core/test/=lib/v4-core/test/
 forge-std/=lib/forge-std/src/
+fhevm/=lib/fhevm/library-solidity/lib/

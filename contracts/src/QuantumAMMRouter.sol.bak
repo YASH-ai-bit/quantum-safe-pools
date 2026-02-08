@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "./QuantumAMMFactory.sol";
 import "./QuantumAMMPool.sol";
 import "./QuantumAMMDarkPool.sol";
-import "./mocks/MockTFHE.sol";
+import "fhevm/FHE.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -244,9 +244,9 @@ contract QuantumAMMRouter {
         );
         
         // Verify minimum liquidity (encrypted comparison)
-        euint64 minLiq = TFHE.asEuint64(encryptedMinLiquidity, inputProof);
-        ebool meetsMin = TFHE.ge(liquidity, minLiq);
-        require(TFHE.decrypt(meetsMin), "INSUFFICIENT_LIQUIDITY_MINTED");
+        euint64 minLiq = FHE.asEuint64(encryptedMinLiquidity, inputProof);
+        ebool meetsMin = FHE.ge(liquidity, minLiq);
+        require(FHE.decrypt(meetsMin), "INSUFFICIENT_LIQUIDITY_MINTED");
         
         return liquidity;
     }
@@ -274,12 +274,12 @@ contract QuantumAMMRouter {
         );
         
         // Verify minimums (slippage protection, encrypted)
-        euint64 min0 = TFHE.asEuint64(encryptedMinAmount0, inputProof);
-        euint64 min1 = TFHE.asEuint64(encryptedMinAmount1, inputProof);
+        euint64 min0 = FHE.asEuint64(encryptedMinAmount0, inputProof);
+        euint64 min1 = FHE.asEuint64(encryptedMinAmount1, inputProof);
         
-        ebool meets0 = TFHE.ge(amount0, min0);
-        ebool meets1 = TFHE.ge(amount1, min1);
-        require(TFHE.decrypt(TFHE.and(meets0, meets1)), "INSUFFICIENT_AMOUNTS");
+        ebool meets0 = FHE.ge(amount0, min0);
+        ebool meets1 = FHE.ge(amount1, min1);
+        require(FHE.decrypt(FHE.and(meets0, meets1)), "INSUFFICIENT_AMOUNTS");
         
         return (amount0, amount1);
     }
@@ -326,7 +326,7 @@ contract QuantumAMMRouter {
     ) external ensure(deadline) returns (euint64 finalAmountOut) {
         require(path.length >= 2, "INVALID_PATH");
         
-        euint64 amountOut = TFHE.asEuint64(encryptedAmountIn, inputProof);
+        euint64 amountOut = FHE.asEuint64(encryptedAmountIn, inputProof);
         
         // Execute swaps through path (all encrypted)
         for (uint256 i = 0; i < path.length - 1; i++) {
@@ -342,16 +342,16 @@ contract QuantumAMMRouter {
                 path[i],
                 path[i + 1],
                 einput({ data: encAmount }),
-                einput({ data: abi.encode(TFHE.asEuint64(0)) }), // No min check on intermediates
+                einput({ data: abi.encode(FHE.asEuint64(0)) }), // No min check on intermediates
                 inputProof,
                 recipient
             );
         }
         
         // Final slippage check
-        euint64 minOut = TFHE.asEuint64(encryptedMinAmountOut, inputProof);
-        ebool meetsMin = TFHE.ge(amountOut, minOut);
-        require(TFHE.decrypt(meetsMin), "INSUFFICIENT_OUTPUT_AMOUNT");
+        euint64 minOut = FHE.asEuint64(encryptedMinAmountOut, inputProof);
+        ebool meetsMin = FHE.ge(amountOut, minOut);
+        require(FHE.decrypt(meetsMin), "INSUFFICIENT_OUTPUT_AMOUNT");
         
         return amountOut;
     }

@@ -21,6 +21,16 @@ export const CONTRACTS = {
     LINK: "0x779877A7B0D9E8603169DdbD7836e478b4624789",
   },
 
+  // Standalone Pools (Not from Factory)
+  STANDALONE_POOLS: [
+    {
+      address: "0x9b3353b8Eb1B391C482957bD8a4EA4083c5c4e15" as `0x${string}`,
+      name: "Official USDC/PYUSD",
+      type: "hybrid" as const,
+      description: "Real FHE hybrid pool with official Sepolia USDC and PYUSD",
+    },
+  ],
+
   // For local development (Anvil)
   LOCAL: {
     QUANTUM_SYSTEM: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // Mock

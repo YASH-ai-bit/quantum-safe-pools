@@ -231,18 +231,93 @@ export function usePools() {
       return;
     }
 
-    // If both counts are 0, clear pools
-    if (poolsLength === 0n && darkPoolsLength === 0n && pools.length > 0) {
-      setPools([]);
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
       const poolsData: Pool[] = [];
+
+      // ========== FETCH STANDALONE POOLS (Not from Factory) ==========
+      if (CONTRACTS.STANDALONE_POOLS && CONTRACTS.STANDALONE_POOLS.length > 0) {
+        for (const standalonePool of CONTRACTS.STANDALONE_POOLS) {
+          try {
+            const poolAddress = standalonePool.address;
+
+            // Get Pool Data
+            const [token0, token1, reserves, totalSupply] = await Promise.all([
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "token0",
+              }),
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "token1",
+              }),
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "getReserves",
+              }),
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "totalSupply",
+              }),
+            ]);
+
+            const [reserve0, reserve1] = reserves as [bigint, bigint];
+
+            // Fetch token info
+            const [token0Symbol, token1Symbol, decimals0, decimals1] =
+              await Promise.all([
+                fetchTokenSymbol(token0 as string),
+                fetchTokenSymbol(token1 as string),
+                fetchTokenDecimals(token0 as string),
+                fetchTokenDecimals(token1 as string),
+              ]);
+
+            // Calculate TVL in USD
+            const tvl0 = Number(formatUnits(reserve0, decimals0));
+            const tvl1 = Number(formatUnits(reserve1, decimals1));
+            const token0Price = getTokenUSDPrice(token0Symbol);
+            const token1Price = getTokenUSDPrice(token1Symbol);
+            const tvlInUSD = tvl0 * token0Price + tvl1 * token1Price;
+
+            poolsData.push({
+              id: poolAddress,
+              poolKey: {
+                currency0: token0 as string,
+                currency1: token1 as string,
+                fee: 3000,
+                tickSpacing: 60,
+                hooks: "0x0000000000000000000000000000000000000000",
+              },
+              sqrtPriceX96: 0n,
+              tick: 0,
+              liquidity: totalSupply as bigint,
+              feeGrowthGlobal0X128: 0n,
+              feeGrowthGlobal1X128: 0n,
+              tvl: tvlInUSD > 0 ? `$${tvlInUSD.toFixed(2)}` : "$0.00",
+              volume24h: "$0.00",
+              fees24h: "$0.00",
+              apy: "0.00%",
+              token0Symbol,
+              token1Symbol,
+              reserve0,
+              reserve1,
+              poolType: standalonePool.type === "hybrid" ? "normal" : "dark",
+            });
+          } catch (err) {
+            console.error(
+              "Error fetching standalone pool:",
+              standalonePool.address,
+              err,
+            );
+          }
+        }
+      }
 
       // ========== FETCH NORMAL POOLS ==========
       if (poolsLength && poolsLength > 0n) {

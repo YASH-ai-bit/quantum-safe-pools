@@ -1,0 +1,192 @@
+Compiling 55 files with Solc 0.8.30
+Solc 0.8.30 finished in 24.58s
+Compiler run successful with warnings:
+Warning (2072): Unused local variable.
+   --> src/QuantumAMMHybridFHE.sol:435:9:
+    |
+435 |         ebool canMatch = FHE.and(priceMatch, bothActive);
+    |         ^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/HackathonPaymaster.sol:43:9:
+   |
+43 |         uint256 maxCost
+   |         ^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/HackathonPaymaster.sol:60:9:
+   |
+60 |         PostOpMode mode,
+   |         ^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/QuantumAMMPool.sol:97:71:
+   |
+97 |     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external {
+   |                                                                       ^^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/mocks/MockGatewayCaller.sol:26:9:
+   |
+26 |         bytes4 callbackSelector,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+  --> src/mocks/MockGatewayCaller.sol:27:9:
+   |
+27 |         uint256 callbackGasLimit
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/mocks/MockTFHE.sol:108:45:
+    |
+108 |     function asEuint64(einput memory input, bytes memory proof) internal pure returns (euint64) {
+    |                                             ^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/mocks/MockTFHE.sol:132:39:
+    |
+132 |     function reencrypt(euint64 value, address account) internal pure returns (bytes memory) {
+    |                                       ^^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to view
+  --> src/HackathonPaymaster.sol:40:5:
+   |
+40 |     function validatePaymasterUserOp(
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+  --> src/MockGroth16Verifier.sol:21:5:
+   |
+21 |     function verify(
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Traces:
+  [3225274] ΓåÆ new DeployHybridFHESimple@0x9f7cF1d1F558E57ef88a59ac3D47214eF25B6A06
+    ΓööΓöÇ ΓåÉ [Return] 15998 bytes of code
+
+  [2922801] DeployHybridFHESimple::run()
+    Γö£ΓöÇ [0] VM::envUint("PRIVATE_KEY") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] <env var value>
+    Γö£ΓöÇ [0] VM::addr(<pk>) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e
+    Γö£ΓöÇ [0] console::log("==============================================") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("QUANTUM POOLS - HYBRID FHE DEPLOYMENT (SIMPLE)") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("==============================================") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Deployer:", 0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Network: Sepolia Testnet") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("FHE: REAL Zama fhEVM v0.5.0") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("==============================================\n") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] VM::startBroadcast(<pk>)
+    Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γö£ΓöÇ [0] console::log("Step 1: Deploying mock ERC20 tokens...") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [442163] ΓåÆ new MockERC20@0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 1869 bytes of code
+    Γö£ΓöÇ [0] console::log("  Token0 (USDC):", MockERC20: [0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [442163] ΓåÆ new MockERC20@0x548e6Bcc45b374af9d0632c981EE33885E73AaC3
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 1869 bytes of code
+    Γö£ΓöÇ [0] console::log("  Token1 (DAI):", MockERC20: [0x548e6Bcc45b374af9d0632c981EE33885E73AaC3]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [46465] MockERC20::mint(0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e, 1000000000000 [1e12])
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e, value: 1000000000000 [1e12])
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [46465] MockERC20::mint(0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e, 1000000000000000000000000 [1e24])
+    Γöé   Γö£ΓöÇ emit Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e, value: 1000000000000000000000000 [1e24])
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("  Minted 1M tokens each\n") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Step 2: Deploying QuantumAMMHybridFHE...") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [1820058] ΓåÆ new QuantumAMMHybridFHE@0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7
+    Γöé   Γö£ΓöÇ [28621] 0x92C920834Ec8941d2C77D188936E1f7A6f49c127::trivialEncrypt(0, 5)
+    Γöé   Γöé   Γö£ΓöÇ [23725] 0xa0722f02Ca955b1C33527FcA422aDc4FEF6667f3::trivialEncrypt(0, 5) [delegatecall]
+    Γöé   Γöé   Γöé   Γö£ΓöÇ [6065] 0xa10998783c8CF88D886Bc30307e631D6686F0A22::348c3185(0000000000000000000000000000000000000000000000000000000000000005b5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500)
+    Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇ [1172] 0x446494Aa6Ddb4e3570808cAeFCdb76662EeB36b7::348c3185(0000000000000000000000000000000000000000000000000000000000000005b5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500) [delegatecall]
+    Γöé   Γöé   Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γöé   Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γöé   Γöé   Γöé   Γö£ΓöÇ [8132] 0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D::allowTransient(0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500, QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7])
+    Γöé   Γöé   Γöé   Γöé   Γö£ΓöÇ [3239] 0x2d018Af3Eb39b91ABd795D43F4afEA5dBe54ECc3::allowTransient(0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500, QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7]) [delegatecall]
+    Γöé   Γöé   Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γöé   Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γöé   Γöé   Γöé   Γö£ΓöÇ emit TrivialEncrypt(param0: QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7], param1: 0, param2: 5, param3: 0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500)
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return] 0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500
+    Γöé   Γö£ΓöÇ [27682] 0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D::allow(0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500, QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7])
+    Γöé   Γöé   Γö£ΓöÇ [27289] 0x2d018Af3Eb39b91ABd795D43F4afEA5dBe54ECc3::allow(0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500, QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7]) [delegatecall]
+    Γöé   Γöé   Γöé   Γö£ΓöÇ emit Allowed(param0: QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7], param1: QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7], param2: 0xb5a69a094a9c8f891daba894e1f57e01ebc1b31cb6ff0000000000aa36a70500)
+    Γöé   Γöé   Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γöé   Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γöé   Γö£ΓöÇ emit HybridPoolInitialized(token0: MockERC20: [0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287], token1: MockERC20: [0x548e6Bcc45b374af9d0632c981EE33885E73AaC3], fheVersion: "Zama fhEVM v0.5.0")
+    Γöé   Γö£ΓöÇ emit FHEOperation(user: QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7], operationType: "INIT_ENCRYPTED_SUPPLY", description: "Initialized encrypted total supply with REAL Zama FHE", gasUsed: 1055716585 [1.055e9])
+    Γöé   ΓööΓöÇ ΓåÉ [Return] 8316 bytes of code
+    Γö£ΓöÇ [0] console::log("  Pool:", QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("  FHE Coprocessor: 0x92C920834Ec8941d2C77D188936E1f7A6f49c127") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("  ACL: 0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D\n") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] VM::stopBroadcast()
+    Γöé   ΓööΓöÇ ΓåÉ [Return]
+    Γö£ΓöÇ [0] console::log("==============================================") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("DEPLOYMENT COMPLETE") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("==============================================") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Token0 (USDC):", MockERC20: [0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("Token1 (DAI):", MockERC20: [0x548e6Bcc45b374af9d0632c981EE33885E73AaC3]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("HybridFHE Pool:", QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] console::log("==============================================\n") [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Stop]
+    Γö£ΓöÇ [0] VM::toString(MockERC20: [0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] "0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287"
+    Γö£ΓöÇ [0] VM::toString(MockERC20: [0x548e6Bcc45b374af9d0632c981EE33885E73AaC3]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] "0x548e6Bcc45b374af9d0632c981EE33885E73AaC3"
+    Γö£ΓöÇ [0] VM::toString(QuantumAMMHybridFHE: [0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7]) [staticcall]
+    Γöé   ΓööΓöÇ ΓåÉ [Return] "0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7"
+    Γö£ΓöÇ [0] VM::writeFile("hybrid-deployment.txt", "HYBRID_FHE_DEPLOYMENT\nToken0: 0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287\nToken1: 0x548e6Bcc45b374af9d0632c981EE33885E73AaC3\nPool: 0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7\n")
+    Γöé   ΓööΓöÇ ΓåÉ [Revert] vm.writeFile: the path hybrid-deployment.txt is not allowed to be accessed for write operations
+    ΓööΓöÇ ΓåÉ [Revert] vm.writeFile: the path hybrid-deployment.txt is not allowed to be accessed for write operations
+
+
+
+== Logs ==
+  ==============================================
+  QUANTUM POOLS - HYBRID FHE DEPLOYMENT (SIMPLE)
+  ==============================================
+  Deployer: 0x427DaA0E27f8F82Bc24EC6921f0301c9d7cfbb2e
+  Network: Sepolia Testnet
+  FHE: REAL Zama fhEVM v0.5.0
+  ==============================================
+
+  Step 1: Deploying mock ERC20 tokens...
+    Token0 (USDC): 0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287
+    Token1 (DAI): 0x548e6Bcc45b374af9d0632c981EE33885E73AaC3
+    Minted 1M tokens each
+
+  Step 2: Deploying QuantumAMMHybridFHE...
+    Pool: 0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7
+    FHE Coprocessor: 0x92C920834Ec8941d2C77D188936E1f7A6f49c127
+    ACL: 0xf0Ffdc93b7E186bC2f8CB3dAA75D86d1930A433D
+
+  ==============================================
+  DEPLOYMENT COMPLETE
+  ==============================================
+  Token0 (USDC): 0xcb5C9d72a56dA45B4285f4Df71Fd570f96C32287
+  Token1 (DAI): 0x548e6Bcc45b374af9d0632c981EE33885E73AaC3
+  HybridFHE Pool: 0x1f4c2f3A84E9f80c52D7f2ac75a8eDD2Be3e9AD7
+  ==============================================
+
+Error: script failed: vm.writeFile: the path hybrid-deployment.txt is not allowed to be accessed for write operations
