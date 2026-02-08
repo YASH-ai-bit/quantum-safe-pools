@@ -3,12 +3,14 @@ pragma solidity ^0.8.20;
 
 import "./QuantumAMMFactory.sol";
 import "./QuantumAMMPool.sol";
+import "./QuantumAMMDarkPool.sol";
+import "./mocks/MockTFHE.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract QuantumAMMRouter {
     QuantumAMMFactory public immutable factory;
-    address public immutable WETH; // Keep for compatibility, though we might not use it directly yet.
+    address public immutable WETH;
 
     modifier ensure(uint256 deadline) {
         require(deadline >= block.timestamp, "EXPIRED");
@@ -36,9 +38,21 @@ contract QuantumAMMRouter {
         uint256 amountAMin,
         uint256 amountBMin
     ) internal returns (uint256 amountA, uint256 amountB) {
-        // REQUIRE pool to exist. No auto-creation to prevent phantom pools or DOS.
-        require(factory.getPool(tokenA, tokenB) != address(0), "POOL_DOES_NOT_EXIST");
+        // REQUIRE pool to exist (check both normal and dark pools)
+        address normalPool = factory.getPool(tokenA, tokenB);
+        address darkPool = factory.getDarkPool(tokenA, tokenB);
+        require(normalPool != address(0) || darkPool != address(0), "POOL_DOES_NOT_EXIST");
         
+        // For dark pools, reserves are encrypted (return 0,0), so use desired amounts
+        if (darkPool != address(0) && normalPool == address(0)) {
+            // Dark pool: use desired amounts directly (no price oracle)
+            (amountA, amountB) = (amountADesired, amountBDesired);
+            require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
+            require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
+            return (amountA, amountB);
+        }
+        
+        // Normal pool: calculate optimal amounts based on reserves
         (uint256 reserveA, uint256 reserveB) = getReserves(tokenA, tokenB);
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
@@ -67,10 +81,21 @@ contract QuantumAMMRouter {
         uint256 deadline
     ) external ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
         (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
-        address pair = factory.getPool(tokenA, tokenB);
-        IERC20(tokenA).transferFrom(msg.sender, pair, amountA);
-        IERC20(tokenB).transferFrom(msg.sender, pair, amountB);
-        liquidity = QuantumAMMPool(pair).mint(to);
+        
+        // Check if dark pool exists (takes precedence if both exist)
+        address darkPool = factory.getDarkPool(tokenA, tokenB);
+        if (darkPool != address(0)) {
+            // Dark pool: Transfer tokens then mint (like normal pool)
+            IERC20(tokenA).transferFrom(msg.sender, darkPool, amountA);
+            IERC20(tokenB).transferFrom(msg.sender, darkPool, amountB);
+            liquidity = QuantumAMMDarkPool(darkPool).mint(amountA, amountB, to);
+        } else {
+            // Normal pool
+            address pair = factory.getPool(tokenA, tokenB);
+            IERC20(tokenA).transferFrom(msg.sender, pair, amountA);
+            IERC20(tokenB).transferFrom(msg.sender, pair, amountB);
+            liquidity = QuantumAMMPool(pair).mint(to);
+        }
     }
 
     // ---- Removal ----
@@ -84,13 +109,25 @@ contract QuantumAMMRouter {
         address to,
         uint256 deadline
     ) public ensure(deadline) returns (uint256 amountA, uint256 amountB) {
-        address pair = factory.getPool(tokenA, tokenB);
-        QuantumAMMPool(pair).transferFrom(msg.sender, pair, liquidity); // Send LP tokens to pair
-        (amountA, amountB) = QuantumAMMPool(pair).burn(to);
-        (address token0,) = sortTokens(tokenA, tokenB);
-        (amountA, amountB) = tokenA == token0 ? (amountA, amountB) : (amountB, amountA);
-        require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
-        require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
+        // Check if dark pool exists (takes precedence)
+        address darkPool = factory.getDarkPool(tokenA, tokenB);
+        if (darkPool != address(0)) {
+            // Dark pool: use compatibility function
+            (amountA, amountB) = QuantumAMMDarkPool(darkPool).removeLiquidity(liquidity, to);
+            (address token0,) = sortTokens(tokenA, tokenB);
+            (amountA, amountB) = tokenA == token0 ? (amountA, amountB) : (amountB, amountA);
+            require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
+            require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
+        } else {
+            // Normal pool
+            address pair = factory.getPool(tokenA, tokenB);
+            QuantumAMMPool(pair).transferFrom(msg.sender, pair, liquidity);
+            (amountA, amountB) = QuantumAMMPool(pair).burn(to);
+            (address token0,) = sortTokens(tokenA, tokenB);
+            (amountA, amountB) = tokenA == token0 ? (amountA, amountB) : (amountB, amountA);
+            require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
+            require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
+        }
     }
 
     // ---- Swap ----
@@ -176,5 +213,185 @@ contract QuantumAMMRouter {
         require(tokenA != tokenB, "IDENTICAL_ADDRESSES");
         (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(token0 != address(0), "ZERO_ADDRESS");
+    }
+    
+    // ============ FHE DARK POOL FUNCTIONS ============
+    
+    /**
+     * @notice Add liquidity to dark pool with encrypted amounts
+     * @dev All amounts are encrypted using FHE
+     */
+    function addLiquidityFHE(
+        address token0,
+        address token1,
+        einput memory encryptedAmount0,
+        einput memory encryptedAmount1,
+        einput memory encryptedMinLiquidity,
+        bytes calldata inputProof,
+        uint256 deadline
+    ) external ensure(deadline) returns (euint64 liquidity) {
+        address darkPool = factory.getDarkPool(token0, token1);
+        require(darkPool != address(0), "DARK_POOL_NOT_FOUND");
+        
+        // Approve dark pool to spend tokens
+        // Note: User must have already approved router
+        
+        // Forward to dark pool
+        liquidity = QuantumAMMDarkPool(darkPool).addLiquidityFHE(
+            encryptedAmount0,
+            encryptedAmount1,
+            inputProof
+        );
+        
+        // Verify minimum liquidity (encrypted comparison)
+        euint64 minLiq = TFHE.asEuint64(encryptedMinLiquidity, inputProof);
+        ebool meetsMin = TFHE.ge(liquidity, minLiq);
+        require(TFHE.decrypt(meetsMin), "INSUFFICIENT_LIQUIDITY_MINTED");
+        
+        return liquidity;
+    }
+    
+    /**
+     * @notice Remove liquidity from dark pool with encrypted amounts
+     */
+    function removeLiquidityFHE(
+        address token0,
+        address token1,
+        einput memory encryptedLPAmount,
+        einput memory encryptedMinAmount0,
+        einput memory encryptedMinAmount1,
+        bytes calldata inputProof,
+        address to,
+        uint256 deadline
+    ) external ensure(deadline) returns (euint64 amount0, euint64 amount1) {
+        address darkPool = factory.getDarkPool(token0, token1);
+        require(darkPool != address(0), "DARK_POOL_NOT_FOUND");
+        
+        // Remove liquidity (encrypted)
+        (amount0, amount1) = QuantumAMMDarkPool(darkPool).removeLiquidityFHE(
+            encryptedLPAmount,
+            inputProof
+        );
+        
+        // Verify minimums (slippage protection, encrypted)
+        euint64 min0 = TFHE.asEuint64(encryptedMinAmount0, inputProof);
+        euint64 min1 = TFHE.asEuint64(encryptedMinAmount1, inputProof);
+        
+        ebool meets0 = TFHE.ge(amount0, min0);
+        ebool meets1 = TFHE.ge(amount1, min1);
+        require(TFHE.decrypt(TFHE.and(meets0, meets1)), "INSUFFICIENT_AMOUNTS");
+        
+        return (amount0, amount1);
+    }
+    
+    /**
+     * @notice Swap tokens in dark pool with encrypted amounts
+     * @dev Provides MEV protection through encrypted swap amounts
+     */
+    function swapExactTokensForTokensFHE(
+        address tokenIn,
+        address tokenOut,
+        einput memory encryptedAmountIn,
+        einput memory encryptedMinAmountOut,
+        bytes calldata inputProof,
+        address to,
+        uint256 deadline
+    ) external ensure(deadline) returns (euint64 amountOut) {
+        address darkPool = factory.getDarkPool(tokenIn, tokenOut);
+        require(darkPool != address(0), "DARK_POOL_NOT_FOUND");
+        
+        // Execute private swap
+        amountOut = QuantumAMMDarkPool(darkPool).swapFHE(
+            tokenIn,
+            tokenOut,
+            encryptedAmountIn,
+            encryptedMinAmountOut,
+            inputProof,
+            to
+        );
+        
+        return amountOut;
+    }
+    
+    /**
+     * @notice Multi-hop FHE swap through dark pools
+     */
+    function swapExactTokensForTokensFHEPath(
+        address[] calldata path,
+        einput memory encryptedAmountIn,
+        einput memory encryptedMinAmountOut,
+        bytes calldata inputProof,
+        address to,
+        uint256 deadline
+    ) external ensure(deadline) returns (euint64 finalAmountOut) {
+        require(path.length >= 2, "INVALID_PATH");
+        
+        euint64 amountOut = TFHE.asEuint64(encryptedAmountIn, inputProof);
+        
+        // Execute swaps through path (all encrypted)
+        for (uint256 i = 0; i < path.length - 1; i++) {
+            address darkPool = factory.getDarkPool(path[i], path[i + 1]);
+            require(darkPool != address(0), "DARK_POOL_NOT_FOUND");
+            
+            address recipient = i < path.length - 2 ? address(this) : to;
+            
+            // Create encrypted input for next swap
+            bytes memory encAmount = abi.encode(amountOut);
+            
+            amountOut = QuantumAMMDarkPool(darkPool).swapFHE(
+                path[i],
+                path[i + 1],
+                einput({ data: encAmount }),
+                einput({ data: abi.encode(TFHE.asEuint64(0)) }), // No min check on intermediates
+                inputProof,
+                recipient
+            );
+        }
+        
+        // Final slippage check
+        euint64 minOut = TFHE.asEuint64(encryptedMinAmountOut, inputProof);
+        ebool meetsMin = TFHE.ge(amountOut, minOut);
+        require(TFHE.decrypt(meetsMin), "INSUFFICIENT_OUTPUT_AMOUNT");
+        
+        return amountOut;
+    }
+    
+    /**
+     * @notice Submit private OTC order to dark pool
+     */
+    function submitPrivateOrder(
+        address token0,
+        address token1,
+        einput memory encryptedPrice,
+        einput memory encryptedAmount,
+        bool isBuyOrder,
+        bytes calldata inputProof
+    ) external returns (uint256 orderId) {
+        address darkPool = factory.getDarkPool(token0, token1);
+        require(darkPool != address(0), "DARK_POOL_NOT_FOUND");
+        
+        orderId = QuantumAMMDarkPool(darkPool).submitPrivateOrder(
+            encryptedPrice,
+            encryptedAmount,
+            isBuyOrder,
+            inputProof
+        );
+        
+        return orderId;
+    }
+    
+    /**
+     * @notice Match two private orders in dark pool
+     */
+    function matchPrivateOrders(
+        address token0,
+        address token1,
+        uint256 buyOrderId,
+        uint256 sellOrderId
+    ) external {
+        address darkPool = factory.getDarkPool(token0, token1);
+        require(darkPool != address(0), "DARK_POOL_NOT_FOUND");
+        
+        QuantumAMMDarkPool(darkPool).matchOrders(buyOrderId, sellOrderId);
     }
 }

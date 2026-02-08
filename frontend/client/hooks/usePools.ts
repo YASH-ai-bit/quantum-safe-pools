@@ -29,6 +29,7 @@ export interface Pool {
   token1Symbol: string;
   reserve0: bigint;
   reserve1: bigint;
+  poolType: "normal" | "dark";
 }
 
 // QuantumAMMFactory ABI
@@ -42,6 +43,20 @@ const QUANTUM_AMM_FACTORY_ABI = [
   },
   {
     name: "allPools",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "allDarkPoolsLength",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "allDarkPools",
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "", type: "uint256" }],
@@ -113,7 +128,12 @@ const ERC20_ABI = [
  * Calculate price from reserves
  * price = reserve1 / reserve0
  */
-function calculatePriceFromReserves(reserve0: bigint, reserve1: bigint, decimals0: number, decimals1: number): number {
+function calculatePriceFromReserves(
+  reserve0: bigint,
+  reserve1: bigint,
+  decimals0: number,
+  decimals1: number,
+): number {
   if (reserve0 === 0n) return 0;
 
   // Format to standard units first
@@ -145,17 +165,30 @@ export function usePools() {
   const publicClient = usePublicClient({ chainId: sepolia.id });
 
   // Fetch pool count from Factory
-  const { data: poolsLength, isLoading: isLoadingPoolsLength } = useReadContract({
-    address: (CONTRACTS?.QUANTUM_AMM_FACTORY || "0xE5acFcC6bf0BB0f64204775526E033C76d2130a9") as `0x${string}`,
-    abi: QUANTUM_AMM_FACTORY_ABI,
-    functionName: "allPoolsLength",
-    chainId: sepolia.id,
-  });
+  const { data: poolsLength, isLoading: isLoadingPoolsLength } =
+    useReadContract({
+      address: (CONTRACTS?.QUANTUM_AMM_FACTORY ||
+        "0xE5acFcC6bf0BB0f64204775526E033C76d2130a9") as `0x${string}`,
+      abi: QUANTUM_AMM_FACTORY_ABI,
+      functionName: "allPoolsLength",
+      chainId: sepolia.id,
+    });
+
+  // Fetch dark pool count from Factory
+  const { data: darkPoolsLength, isLoading: isLoadingDarkPoolsLength } =
+    useReadContract({
+      address: (CONTRACTS?.QUANTUM_AMM_FACTORY ||
+        "0xE5acFcC6bf0BB0f64204775526E033C76d2130a9") as `0x${string}`,
+      abi: QUANTUM_AMM_FACTORY_ABI,
+      functionName: "allDarkPoolsLength",
+      chainId: sepolia.id,
+    });
 
   // Fetch token symbol
   const fetchTokenSymbol = useCallback(
     async (address: string): Promise<string> => {
-      if (!address || address === "0x0000000000000000000000000000000000000000") return "ETH";
+      if (!address || address === "0x0000000000000000000000000000000000000000")
+        return "ETH";
       if (!publicClient) return address.slice(0, 6);
       try {
         const symbol = (await publicClient.readContract({
@@ -174,7 +207,8 @@ export function usePools() {
   // Fetch token decimals
   const fetchTokenDecimals = useCallback(
     async (address: string): Promise<number> => {
-      if (!address || address === "0x0000000000000000000000000000000000000000") return 18;
+      if (!address || address === "0x0000000000000000000000000000000000000000")
+        return 18;
       if (!publicClient) return 18;
       try {
         const decimals = (await publicClient.readContract({
@@ -192,8 +226,14 @@ export function usePools() {
 
   // Fetch pools details
   const fetchPools = useCallback(async () => {
-    if (!publicClient || !poolsLength) {
-      if (poolsLength === 0n && pools.length > 0) setPools([]);
+    if (!publicClient) {
+      setLoading(false);
+      return;
+    }
+
+    // If both counts are 0, clear pools
+    if (poolsLength === 0n && darkPoolsLength === 0n && pools.length > 0) {
+      setPools([]);
       setLoading(false);
       return;
     }
@@ -203,76 +243,169 @@ export function usePools() {
 
     try {
       const poolsData: Pool[] = [];
-      const length = Number(poolsLength);
 
-      // Iterate through all pools
-      for (let i = 0; i < length; i++) {
-        try {
-          const poolAddress = await publicClient.readContract({
-            address: CONTRACTS.QUANTUM_AMM_FACTORY as `0x${string}`,
-            abi: QUANTUM_AMM_FACTORY_ABI,
-            functionName: "allPools",
-            args: [BigInt(i)],
-          }) as `0x${string}`;
+      // ========== FETCH NORMAL POOLS ==========
+      if (poolsLength && poolsLength > 0n) {
+        const normalLength = Number(poolsLength);
 
-          // Get Pool Data
-          const [token0, token1, reserves, totalSupply] = await Promise.all([
-            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "token0" }),
-            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "token1" }),
-            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "getReserves" }),
-            publicClient.readContract({ address: poolAddress, abi: QUANTUM_AMM_POOL_ABI, functionName: "totalSupply" }),
-          ]);
+        for (let i = 0; i < normalLength; i++) {
+          try {
+            const poolAddress = (await publicClient.readContract({
+              address: CONTRACTS.QUANTUM_AMM_FACTORY as `0x${string}`,
+              abi: QUANTUM_AMM_FACTORY_ABI,
+              functionName: "allPools",
+              args: [BigInt(i)],
+            })) as `0x${string}`;
 
-          const [reserve0, reserve1] = reserves as [bigint, bigint];
+            // Get Pool Data
+            const [token0, token1, reserves, totalSupply] = await Promise.all([
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "token0",
+              }),
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "token1",
+              }),
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "getReserves",
+              }),
+              publicClient.readContract({
+                address: poolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "totalSupply",
+              }),
+            ]);
 
-          // Fetch token info
-          const [token0Symbol, token1Symbol, decimals0, decimals1] = await Promise.all([
-            fetchTokenSymbol(token0 as string),
-            fetchTokenSymbol(token1 as string),
-            fetchTokenDecimals(token0 as string),
-            fetchTokenDecimals(token1 as string),
-          ]);
+            const [reserve0, reserve1] = reserves as [bigint, bigint];
 
-          // Calculate Price
-          const price = calculatePriceFromReserves(reserve0, reserve1, decimals0, decimals1);
+            // Fetch token info
+            const [token0Symbol, token1Symbol, decimals0, decimals1] =
+              await Promise.all([
+                fetchTokenSymbol(token0 as string),
+                fetchTokenSymbol(token1 as string),
+                fetchTokenDecimals(token0 as string),
+                fetchTokenDecimals(token1 as string),
+              ]);
 
-          // Calculate TVL in USD using token prices
-          const tvl0 = Number(formatUnits(reserve0, decimals0));
-          const tvl1 = Number(formatUnits(reserve1, decimals1));
-          const token0Price = getTokenUSDPrice(token0Symbol);
-          const token1Price = getTokenUSDPrice(token1Symbol);
-          const tvlInUSD = (tvl0 * token0Price) + (tvl1 * token1Price);
+            // Calculate TVL in USD using token prices
+            const tvl0 = Number(formatUnits(reserve0, decimals0));
+            const tvl1 = Number(formatUnits(reserve1, decimals1));
+            const token0Price = getTokenUSDPrice(token0Symbol);
+            const token1Price = getTokenUSDPrice(token1Symbol);
+            const tvlInUSD = tvl0 * token0Price + tvl1 * token1Price;
 
-          // Estimate APY based on pool fee (0.3%) and TVL
-          // Simplified: assume some trading activity generates ~5-10% APY
-          const apyEstimate = tvlInUSD > 0 ? Math.min(15, Math.max(3, 5 + Math.random() * 5)).toFixed(2) : "0.00";
+            // Estimate APY based on pool fee (0.3%) and TVL
+            const apyEstimate =
+              tvlInUSD > 0
+                ? Math.min(15, Math.max(3, 5 + Math.random() * 5)).toFixed(2)
+                : "0.00";
 
-          poolsData.push({
-            id: poolAddress,
-            poolKey: {
-              currency0: token0 as string,
-              currency1: token1 as string,
-              fee: 3000, // Fixed 0.3% approx or dynamic
-              tickSpacing: 60,
-              hooks: "0x0000000000000000000000000000000000000000",
-            },
-            sqrtPriceX96: 0n, // Not used in standard AMM
-            tick: 0, // Not used
-            liquidity: totalSupply as bigint, // LP token supply
-            reserve0,
-            reserve1,
-            feeGrowthGlobal0X128: 0n,
-            feeGrowthGlobal1X128: 0n,
-            tvl: tvlInUSD > 0 ? tvlInUSD.toFixed(2) : "0.00",
-            volume24h: "0.00", // Would need event tracking
-            fees24h: "0.00", // Would need event tracking
-            apy: `${apyEstimate}%`,
-            token0Symbol,
-            token1Symbol,
-          });
+            poolsData.push({
+              id: poolAddress,
+              poolKey: {
+                currency0: token0 as string,
+                currency1: token1 as string,
+                fee: 3000, // Fixed 0.3% approx or dynamic
+                tickSpacing: 60,
+                hooks: "0x0000000000000000000000000000000000000000",
+              },
+              sqrtPriceX96: 0n,
+              tick: 0,
+              liquidity: totalSupply as bigint,
+              reserve0,
+              reserve1,
+              feeGrowthGlobal0X128: 0n,
+              feeGrowthGlobal1X128: 0n,
+              tvl: tvlInUSD > 0 ? tvlInUSD.toFixed(2) : "0.00",
+              volume24h: "0.00",
+              fees24h: "0.00",
+              apy: `${apyEstimate}%`,
+              token0Symbol,
+              token1Symbol,
+              poolType: "normal",
+            });
+          } catch (err) {
+            console.error(
+              "Error fetching normal pool details for index",
+              i,
+              ":",
+              err,
+            );
+          }
+        }
+      }
 
-        } catch (err) {
-          console.error("Error fetching pool details for index", i, ":", err);
+      // ========== FETCH DARK POOLS ==========
+      if (darkPoolsLength && darkPoolsLength > 0n) {
+        const darkLength = Number(darkPoolsLength);
+
+        for (let i = 0; i < darkLength; i++) {
+          try {
+            const darkPoolAddress = (await publicClient.readContract({
+              address: CONTRACTS.QUANTUM_AMM_FACTORY as `0x${string}`,
+              abi: QUANTUM_AMM_FACTORY_ABI,
+              functionName: "allDarkPools",
+              args: [BigInt(i)],
+            })) as `0x${string}`;
+
+            // Dark pools only expose token0 and token1 (reserves are encrypted)
+            const [token0, token1] = await Promise.all([
+              publicClient.readContract({
+                address: darkPoolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "token0",
+              }),
+              publicClient.readContract({
+                address: darkPoolAddress,
+                abi: QUANTUM_AMM_POOL_ABI,
+                functionName: "token1",
+              }),
+            ]);
+
+            // Fetch token symbols
+            const [token0Symbol, token1Symbol] = await Promise.all([
+              fetchTokenSymbol(token0 as string),
+              fetchTokenSymbol(token1 as string),
+            ]);
+
+            // Dark pools have encrypted data - show limited info
+            poolsData.push({
+              id: darkPoolAddress,
+              poolKey: {
+                currency0: token0 as string,
+                currency1: token1 as string,
+                fee: 3000,
+                tickSpacing: 60,
+                hooks: "0x0000000000000000000000000000000000000000",
+              },
+              sqrtPriceX96: 0n,
+              tick: 0,
+              liquidity: 0n, // Encrypted, not queryable
+              reserve0: 0n, // Encrypted, not queryable
+              reserve1: 0n, // Encrypted, not queryable
+              feeGrowthGlobal0X128: 0n,
+              feeGrowthGlobal1X128: 0n,
+              tvl: "PRIVATE", // Encrypted
+              volume24h: "PRIVATE", // Encrypted
+              fees24h: "PRIVATE", // Encrypted
+              apy: "PRIVATE", // Cannot calculate without reserves
+              token0Symbol,
+              token1Symbol,
+              poolType: "dark",
+            });
+          } catch (err) {
+            console.error(
+              "Error fetching dark pool details for index",
+              i,
+              ":",
+              err,
+            );
+          }
         }
       }
 
@@ -283,15 +416,21 @@ export function usePools() {
     } finally {
       setLoading(false);
     }
-  }, [publicClient, poolsLength, fetchTokenSymbol, fetchTokenDecimals]);
+  }, [
+    publicClient,
+    poolsLength,
+    darkPoolsLength,
+    fetchTokenSymbol,
+    fetchTokenDecimals,
+  ]);
 
   useEffect(() => {
-    if (poolsLength !== undefined) {
+    if (poolsLength !== undefined || darkPoolsLength !== undefined) {
       fetchPools();
     }
-  }, [poolsLength, fetchPools]);
+  }, [poolsLength, darkPoolsLength, fetchPools]);
 
-  const isLoading = isLoadingPoolsLength || loading;
+  const isLoading = isLoadingPoolsLength || isLoadingDarkPoolsLength || loading;
 
   return {
     pools,
