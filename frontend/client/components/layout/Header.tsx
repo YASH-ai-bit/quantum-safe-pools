@@ -14,7 +14,7 @@ export default function Header() {
           <Link to="/" className="flex items-center gap-2 group">
             <img
               src="/logo.svg"
-              alt="Quantum Vault Logo"
+              alt="Quantum Pools Logo"
               className="w-10 h-10"
             />
             <span className="text-xl font-bold pixel-text hidden sm:inline text-primary">

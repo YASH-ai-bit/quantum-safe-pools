@@ -34,7 +34,7 @@ const NotFound = () => {
               {location.pathname}
             </p>
             <p className="text-foreground/70 pixel-text">
-              If you believe this should be a working page, please let us know! We are always improving QuantumVault.
+              If you believe this should be a working page, please let us know! We are always improving QuantumPools.
             </p>
           </div>
 

@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Pools from "./pages/Pools";
 import CreatePool from "./pages/CreatePool";
 import PoolDetail from "./pages/PoolDetail";
+import FAQ from "./pages/FAQ";
 import NotFound from "./pages/NotFound";
 
 import Wallet from "./pages/Wallet";
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/pool/:poolId" element={<PoolDetail />} />
               <Route path="/wallet" element={<Wallet />} />
               <Route path="/create-pool" element={<CreatePool />} />
+              <Route path="/faq" element={<FAQ />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

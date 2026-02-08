@@ -69,9 +69,11 @@ export default function Index() {
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </Link>
-                <button className="w-full sm:w-auto px-8 py-4 secondary-border text-primary font-bold text-lg hover:border-primary transition-all duration-300 pixel-text glitch-hover">
-                  [ LEARN_MORE ]
-                </button>
+                <Link to="/faq">
+                  <button className="w-full sm:w-auto px-8 py-4 secondary-border text-primary font-bold text-lg hover:border-primary transition-all duration-300 pixel-text glitch-hover">
+                    [ LEARN_MORE ]
+                  </button>
+                </Link>
               </div>
 
               {/* Trust Indicators */}

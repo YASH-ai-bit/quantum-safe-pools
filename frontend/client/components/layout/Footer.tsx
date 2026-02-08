@@ -1,4 +1,5 @@
 import { Github, Twitter, Linkedin } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function Footer() {
   return (
@@ -8,10 +9,10 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <h3 className="text-xl font-bold pixel-text text-primary mb-3">
-              QUANTUM_VAULT
+              QUANTUM_POOLS
             </h3>
             <p className="text-foreground/70 text-sm pixel-text">
-              Quantum-safe cryptocurrency wallet and liquidity pool platform.
+              Quantum-safe liquidity pools and wallet platform.
             </p>
           </div>
 
@@ -22,14 +23,14 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2 text-sm text-foreground/70 pixel-text">
               <li>
-                <a href="#" className="hover:text-primary transition">
+                <Link to="/wallet" className="hover:text-primary transition uppercase">
                   wallet
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-primary transition">
+                <Link to="/pools" className="hover:text-primary transition uppercase">
                   pools
-                </a>
+                </Link>
               </li>
               <li>
                 <a href="#" className="hover:text-primary transition">
@@ -56,9 +57,9 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#" className="hover:text-primary transition">
+                <Link to="/faq" className="hover:text-primary transition uppercase">
                   faq
-                </a>
+                </Link>
               </li>
               <li>
                 <a href="#" className="hover:text-primary transition">
@@ -80,19 +81,25 @@ export default function Footer() {
             </h4>
             <div className="flex gap-4">
               <a
-                href="#"
+                href="https://x.com/offee_co"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="p-2 hover:bg-primary/20 text-foreground hover:text-primary transition border border-transparent hover:border-primary"
               >
                 <Twitter className="w-5 h-5" />
               </a>
               <a
-                href="#"
+                href="https://github.com/YASH-ai-bit/quantum-safe-pools"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="p-2 hover:bg-primary/20 text-foreground hover:text-primary transition border border-transparent hover:border-primary"
               >
                 <Github className="w-5 h-5" />
               </a>
               <a
-                href="#"
+                href="https://www.linkedin.com/in/samarth-208-patel/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="p-2 hover:bg-primary/20 text-foreground hover:text-primary transition border border-transparent hover:border-primary"
               >
                 <Linkedin className="w-5 h-5" />
@@ -105,7 +112,7 @@ export default function Footer() {
         <div className="border-t-2 border-primary pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-foreground/70 pixel-text">
-              (c) 2024 QuantumVault. All rights reserved.
+              (c) 2026 QuantumPools. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm text-foreground/70 pixel-text">
               <a href="#" className="hover:text-primary transition">
