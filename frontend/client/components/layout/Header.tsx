@@ -18,7 +18,7 @@ export default function Header() {
               className="w-10 h-10"
             />
             <span className="text-xl font-bold pixel-text hidden sm:inline text-primary">
-              QUANTUM_VAULT
+              QUANTUM_POOLS
             </span>
           </Link>
 

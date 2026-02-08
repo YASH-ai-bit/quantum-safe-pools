@@ -10,6 +10,7 @@ import {
   Loader2,
   Wallet,
   AlertCircle,
+  Lock,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { usePools } from "@/hooks/usePools";
@@ -527,24 +528,41 @@ export default function PoolDetail() {
                   {pool.id}
                 </p>
               </div>
-              <div>
-                <p className="text-foreground/60 text-sm mb-1">FEE_TIER</p>
+              <div className="group/fee relative">
+                <p className="text-foreground/60 text-sm mb-1 cursor-help border-b border-dashed border-foreground/30 inline-block">FEE_TIER</p>
                 <p className="text-foreground font-bold">
                   {(pool.poolKey.fee / 10000).toFixed(2)}%
                 </p>
+                {(pool.poolKey.fee / 10000).toFixed(2) === "0.30" && (
+                  <div className="absolute left-0 bottom-full mb-2 w-48 p-2 bg-primary text-black text-xs font-bold rounded opacity-0 group-hover/fee:opacity-100 transition-opacity pointer-events-none z-10 text-center shadow-lg border-2 border-primary-foreground">
+                    Standard Tier. Become a QS to unlock lower fees!
+                    <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-primary"></div>
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-foreground/60 text-sm mb-1">TVL</p>
-                <p className="text-foreground font-bold text-xl">
-                  ${pool.tvl || "0.00"}
-                </p>
-              </div>
-              <div>
-                <p className="text-foreground/60 text-sm mb-1">APY</p>
-                <p className="text-primary font-bold text-xl">
-                  {pool.apy || "0.00"}%
-                </p>
-              </div>
+              {pool.poolType === "dark" ? (
+                <div className="col-span-2 border border-purple-500/20 bg-purple-500/5 p-4 flex items-center justify-center gap-3">
+                  <Lock className="w-5 h-5 text-purple-500" />
+                  <p className="text-purple-400 text-sm font-bold">
+                    METRICS_HIDDEN_FOR_PRIVACY
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-foreground/60 text-sm mb-1">TVL</p>
+                    <p className="text-foreground font-bold text-xl">
+                      ${pool.tvl || "0.00"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-foreground/60 text-sm mb-1">APY</p>
+                    <p className="text-primary font-bold text-xl">
+                      {pool.apy || "0.00"}%
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -572,41 +590,52 @@ export default function PoolDetail() {
                   POOL_METRICS
                 </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="p-4 border border-primary/50">
-                    <p className="text-foreground/60 text-sm mb-2">
-                      EXCHANGE_RATE
-                    </p>
-                    <p className="text-foreground font-bold text-xl">
-                      1 {pool.token0Symbol} = {pool.reserve0 > 0n
-                        ? (parseFloat(formatUnits(pool.reserve1, getTokenDecimals(pool.token1Symbol))) /
-                          parseFloat(formatUnits(pool.reserve0, getTokenDecimals(pool.token0Symbol)))).toFixed(6)
-                        : "0"} {pool.token1Symbol}
+                {pool.poolType === "dark" ? (
+                  <div className="border border-purple-500/20 bg-purple-500/5 p-8 text-center">
+                    <Lock className="w-12 h-12 text-purple-500 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-xl font-bold text-purple-400 mb-2">POOLS_METRICS_HIDDEN</h3>
+                    <p className="text-foreground/60 max-w-md mx-auto pixel-text">
+                      This is a generic pool with enhanced privacy features.
+                      Reserves, exchange rates, and liquidity depth are not public.
                     </p>
                   </div>
-                  <div className="p-4 border border-primary/50">
-                    <p className="text-foreground/60 text-sm mb-2">TOTAL_LP_SUPPLY</p>
-                    <p className="text-foreground font-bold text-xl">
-                      {parseFloat(formatEther(pool.liquidity)).toFixed(4)} LP
-                    </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-4 border border-primary/50">
+                      <p className="text-foreground/60 text-sm mb-2">
+                        EXCHANGE_RATE
+                      </p>
+                      <p className="text-foreground font-bold text-xl">
+                        1 {pool.token0Symbol} = {pool.reserve0 > 0n
+                          ? (parseFloat(formatUnits(pool.reserve1, getTokenDecimals(pool.token1Symbol))) /
+                            parseFloat(formatUnits(pool.reserve0, getTokenDecimals(pool.token0Symbol)))).toFixed(6)
+                          : "0"} {pool.token1Symbol}
+                      </p>
+                    </div>
+                    <div className="p-4 border border-primary/50">
+                      <p className="text-foreground/60 text-sm mb-2">TOTAL_LP_SUPPLY</p>
+                      <p className="text-foreground font-bold text-xl">
+                        {parseFloat(formatEther(pool.liquidity)).toFixed(4)} LP
+                      </p>
+                    </div>
+                    <div className="p-4 border border-primary/50">
+                      <p className="text-foreground/60 text-sm mb-2">
+                        {pool.token0Symbol}_RESERVE
+                      </p>
+                      <p className="text-foreground font-bold text-xl">
+                        {parseFloat(formatUnits(pool.reserve0, getTokenDecimals(pool.token0Symbol))).toFixed(4)}
+                      </p>
+                    </div>
+                    <div className="p-4 border border-primary/50">
+                      <p className="text-foreground/60 text-sm mb-2">
+                        {pool.token1Symbol}_RESERVE
+                      </p>
+                      <p className="text-foreground font-bold text-xl">
+                        {parseFloat(formatUnits(pool.reserve1, getTokenDecimals(pool.token1Symbol))).toFixed(4)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-4 border border-primary/50">
-                    <p className="text-foreground/60 text-sm mb-2">
-                      {pool.token0Symbol}_RESERVE
-                    </p>
-                    <p className="text-foreground font-bold text-xl">
-                      {parseFloat(formatUnits(pool.reserve0, getTokenDecimals(pool.token0Symbol))).toFixed(4)}
-                    </p>
-                  </div>
-                  <div className="p-4 border border-primary/50">
-                    <p className="text-foreground/60 text-sm mb-2">
-                      {pool.token1Symbol}_RESERVE
-                    </p>
-                    <p className="text-foreground font-bold text-xl">
-                      {parseFloat(formatUnits(pool.reserve1, getTokenDecimals(pool.token1Symbol))).toFixed(4)}
-                    </p>
-                  </div>
-                </div>
+                )}
 
                 {/* Investment Analysis */}
                 {userLpBalance > 0n && (

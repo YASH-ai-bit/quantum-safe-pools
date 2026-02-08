@@ -21,7 +21,7 @@ export default function QuantumSetupModal({ isOpen, onClose, onRegistrationCompl
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
-      
+
       return () => {
         // Restore scroll position
         document.body.style.position = '';
@@ -34,7 +34,7 @@ export default function QuantumSetupModal({ isOpen, onClose, onRegistrationCompl
   }, [isOpen]);
   const { publicKey, publicKeyHash, refreshData } = useSnap();
   const { register, isLoading, error: registryError } = useQuantumRegistry();
-  
+
   const [step, setStep] = useState<Step>('generate');
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -122,7 +122,7 @@ export default function QuantumSetupModal({ isOpen, onClose, onRegistrationCompl
                       STEP_1: GENERATE_DILITHIUM_KEYS
                     </h3>
                     <p className="pixel-text text-sm text-foreground/80 mb-4">
-                      Your quantum-resistant keypair will be generated using Dilithium-2 
+                      Your quantum-resistant keypair will be generated using Dilithium-2
                       algorithm and stored securely in MetaMask Snap.
                     </p>
                     <ul className="pixel-text text-xs text-foreground/60 space-y-2 mb-6">
@@ -157,7 +157,7 @@ export default function QuantumSetupModal({ isOpen, onClose, onRegistrationCompl
                     <p className="pixel-text text-sm text-foreground/80 mb-4">
                       Register your public key hash to the QuantumRegistry contract on Sepolia.
                     </p>
-                    
+
                     {publicKeyHash && (
                       <div className="mb-4 p-3 bg-primary/10 border border-primary/30">
                         <p className="pixel-text text-xs text-foreground/60 mb-1">PUBLIC_KEY_HASH:</p>
@@ -170,7 +170,7 @@ export default function QuantumSetupModal({ isOpen, onClose, onRegistrationCompl
                     <ul className="pixel-text text-xs text-foreground/60 space-y-2">
                       <li>• On-chain identity verification</li>
                       <li>• Enables quantum-safe pool access</li>
-                      <li>• Lower swap fees (0.15% vs 0.40%)</li>
+                      <li>• Lower swap fees (0.15% vs 0.30%)</li>
                     </ul>
                   </div>
                 </div>

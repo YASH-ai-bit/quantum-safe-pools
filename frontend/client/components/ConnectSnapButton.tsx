@@ -248,7 +248,7 @@ export default function ConnectSnapButton() {
                         </p>
                         <ul className="text-xs text-foreground/60 space-y-1 mb-3">
                           <li>• Access quantum-gated pools</li>
-                          <li>• Reduced swap fees (0.15% vs 0.40%)</li>
+                          <li>• Reduced swap fees (0.15% vs 0.30%)</li>
                           <li>• MEV resistance protection</li>
                         </ul>
 

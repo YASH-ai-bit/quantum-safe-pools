@@ -34,9 +34,9 @@ export default function Pools() {
   const avgAPY =
     publicPools.length > 0
       ? publicPools.reduce(
-          (sum, pool) => sum + parseFloat(pool.apy || "0"),
-          0,
-        ) / publicPools.length
+        (sum, pool) => sum + parseFloat(pool.apy || "0"),
+        0,
+      ) / publicPools.length
       : 0;
 
   const filteredPools = pools.filter((pool) => {
@@ -172,9 +172,17 @@ export default function Pools() {
                             </span>
                           )}
                         </div>
-                        <p className="text-foreground/60 text-sm">
-                          {feePercent}% fee
-                        </p>
+                        <div className="group/fee relative">
+                          <p className="text-foreground/60 text-sm cursor-help border-b border-dashed border-foreground/30 inline-block">
+                            {feePercent}% fee
+                          </p>
+                          {feePercent === "0.30" && (
+                            <div className="absolute left-0 bottom-full mb-2 w-48 p-2 bg-primary text-black text-xs font-bold rounded opacity-0 group-hover/fee:opacity-100 transition-opacity pointer-events-none z-10 text-center shadow-lg border-2 border-primary-foreground">
+                              Standard Tier. Become a QS to unlock lower fees!
+                              <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-primary"></div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="p-2 border-2 border-primary group-hover:bg-primary/20 transition">
                         <TrendingUp className="w-5 h-5 text-primary" />
@@ -183,26 +191,31 @@ export default function Pools() {
 
                     {/* Stats */}
                     <div className="space-y-3 mb-6 flex-1 pixel-text">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-foreground/60">tvl</span>
-                        <span
-                          className={`font-bold ${pool.tvl === "PRIVATE" ? "text-purple-400" : "text-foreground"}`}
-                        >
-                          {pool.tvl === "PRIVATE"
-                            ? "🔒 PRIVATE"
-                            : `$${pool.tvl || "0.00"}`}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-foreground/60">apy</span>
-                        <span
-                          className={`font-bold ${pool.apy === "PRIVATE" ? "text-purple-400" : "text-primary"}`}
-                        >
-                          {pool.apy === "PRIVATE"
-                            ? "🔒 PRIVATE"
-                            : `${pool.apy || "0.00"}%`}
-                        </span>
-                      </div>
+                      {pool.poolType === "dark" ? (
+                        <div className="text-center py-4 border border-purple-500/20 bg-purple-500/5">
+                          <Lock className="w-8 h-8 text-purple-500 mx-auto mb-2 opacity-50" />
+                          <p className="text-purple-400 text-xs text-center px-2">
+                            METRICS_HIDDEN
+                            <br />
+                            <span className="text-purple-400/60 text-[10px]">ENHANCED_PRIVACY</span>
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-foreground/60">tvl</span>
+                            <span className="font-bold text-foreground">
+                              ${pool.tvl || "0.00"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-foreground/60">apy</span>
+                            <span className="font-bold text-primary">
+                              {pool.apy || "0.00"}%
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Action Button */}

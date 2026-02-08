@@ -42,7 +42,8 @@ export default function Dashboard() {
     }))
     : [{ name: "No Assets", value: 100 }];
 
-  const colors = ["#00ff00", "#00ff00", "#00ff00", "#00ff00"];
+  // Distinct colors for chart slices
+  const COLORS = ["#00ff00", "#bf00ff", "#3b82f6", "#eab308", "#f43f5e"];
 
   // Assets from token balances
   const assets = tokenBalances.map((token, index) => ({
@@ -161,32 +162,66 @@ export default function Dashboard() {
             </div>
 
             {/* Asset Allocation */}
-            <div className="border-2 border-primary p-6 flex flex-col justify-center glitch-hover">
+            <div className="border-2 border-primary p-6 glitch-hover flex flex-col">
               <h3 className="text-xl font-bold mb-6 pixel-text text-foreground glitch-text-hover">ASSET_ALLOCATION</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={allocationData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${value}%`}
-                    outerRadius={80}
-                    fill="#00ff00"
-                    dataKey="value"
-                  >
-                    {allocationData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={colors[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#000000",
-                      border: "2px solid #00ff00",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex flex-col md:flex-row items-center justify-center gap-8 flex-1">
+                {/* Chart */}
+                <div className="w-full md:w-1/2 h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={allocationData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {allocationData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#000000",
+                          border: "2px solid #00ff00",
+                          borderRadius: "4px",
+                          color: "#fff"
+                        }}
+                        itemStyle={{ color: "#fff" }}
+                        formatter={(value: number) => [`${value}%`, 'Allocation']}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Legend */}
+                <div className="w-full md:w-1/2 space-y-4">
+                  {allocationData.map((entry, index) => (
+                    <div key={`legend-${index}`} className="flex items-center justify-between group">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: COLORS[index % COLORS.length], boxShadow: `0 0 10px ${COLORS[index % COLORS.length]}` }}
+                        />
+                        <span className="text-foreground font-medium pixel-text text-sm group-hover:text-primary transition-colors">
+                          {entry.name}
+                        </span>
+                      </div>
+                      <span className="text-foreground/60 font-mono text-sm group-hover:text-foreground transition-colors">
+                        {entry.value}%
+                      </span>
+                    </div>
+                  ))}
+                  {allocationData.length === 0 && (
+                    <div className="text-center text-foreground/40 pixel-text text-sm py-4">
+                      No assets to display
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
