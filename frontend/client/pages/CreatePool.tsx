@@ -5,6 +5,7 @@ import PoolCreationModal, {
   PoolCreationStep,
 } from "@/components/PoolCreationModal";
 import PoolTypeSelector from "@/components/PoolTypeSelector";
+import { LPTokenEducation } from "@/components/LPTokenEducation";
 import {
   ArrowRight,
   Plus,
@@ -550,19 +551,17 @@ export default function CreatePool() {
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${
-                    s <= step
+                  className={`w-10 h-10 border-2 font-bold flex items-center justify-center transition-all pixel-text ${s <= step
                       ? "bg-primary text-black border-primary"
                       : "bg-black border-primary/30 text-foreground/60"
-                  }`}
+                    }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`h-1 w-12 transition-all ${
-                      s < step ? "bg-primary" : "bg-primary/30"
-                    }`}
+                    className={`h-1 w-12 transition-all ${s < step ? "bg-primary" : "bg-primary/30"
+                      }`}
                   />
                 )}
               </div>
@@ -751,6 +750,11 @@ export default function CreatePool() {
                     You will receive LP tokens representing your share of the
                     pool. Store these securely.
                   </p>
+                </div>
+
+                {/* LP Token Education */}
+                <div className="mt-6">
+                  <LPTokenEducation />
                 </div>
 
                 <div className="flex gap-4">

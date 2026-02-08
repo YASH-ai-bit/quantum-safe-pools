@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./QuantumSystem.sol";
 
 contract QuantumAMMPool is ERC20, Ownable {
@@ -61,7 +62,7 @@ contract QuantumAMMPool is ERC20, Ownable {
         uint256 amount1 = balance1 - _reserve1;
 
         if (totalSupply() == 0) {
-            liquidity = caseSqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
+            liquidity = Math.sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
             _mint(address(0xdEaD), MINIMUM_LIQUIDITY);
         } else {
             liquidity = min(
@@ -150,19 +151,6 @@ contract QuantumAMMPool is ERC20, Ownable {
     }
 
     // Helper math functions
-    function caseSqrt(uint256 y) internal pure returns (uint256 z) {
-        if (y > 3) {
-            z = y;
-            uint256 x = y / 2 + 1;
-            while (x < z) {
-                z = x;
-                x = (y / x + x) / 2;
-            }
-        } else if (y != 0) {
-            z = 1;
-        }
-    }
-
     function min(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = x < y ? x : y;
     }
